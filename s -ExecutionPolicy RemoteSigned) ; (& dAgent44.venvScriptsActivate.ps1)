@@ -1,15 +1,13 @@
-[1mdiff --git a/tests/test_local_provider.py b/tests/test_local_provider.py[m
-[1mindex efc3089..53d2886 100644[m
-[1m--- a/tests/test_local_provider.py[m
-[1m+++ b/tests/test_local_provider.py[m
-[36m@@ -352,7 +352,9 @@[m [mdef test_local_adapter_model_name_is_tagged() -> None:[m
+[1mdiff --git a/README.md b/README.md[m
+[1mindex ff3fd6b..1b56327 100644[m
+[1m--- a/README.md[m
+[1m+++ b/README.md[m
+[36m@@ -55,7 +55,7 @@[m [mflowchart TD[m
+     style HardDeny fill:#ffdddd,stroke:#cc0000[m
+     style DenyRule fill:#ffe5e5,stroke:#cc4444[m
+     style Allow fill:#e6ffec,stroke:#44aa55[m
+[31m-    style Undecided fill:#fff4c4,stroke:#aaaa22][m
+[32m+[m[32m    style Undecided fill:#fff4c4,stroke:#aaaa22[m
+ ```[m
  [m
- def test_default_proxy_path_is_rules_only_not_local() -> None:[m
-     """Without --local-model the proxy must use the offline rules-only adapter."""[m
-[31m-    _params, _observer, _policy, adapter = parse_downstream_args(["--", "python", "s.py"])[m
-[32m+[m[32m    _params, _observer, _policy, adapter, _delegation = parse_downstream_args([m
-[32m+[m[32m        ["--", "python", "s.py"][m
-[32m+[m[32m    )[m
-     assert isinstance(adapter, RulesOnlyAdapter)[m
- [m
- [m
+ **Key boundaries:**[m
