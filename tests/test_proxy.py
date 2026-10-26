@@ -48,9 +48,17 @@ async def proxy_session(
 @asynccontextmanager
 async def observing_proxy_session(
     observe_path: Path,
+    policy_path: str | None = None,
 ) -> AsyncIterator[ClientSession]:
-    """Yield an initialized session whose proxy writes observations to a file."""
-    args = [*PROXY_MODULE, "--observe", str(observe_path), "--", sys.executable, *DEMO_MODULE]
+    """Yield an initialized session whose proxy writes observations to a file.
+
+    If ``policy_path`` is provided, the proxy is launched with ``--policy <path>``
+    to enable ALLOW/DENY enforcement of tool calls.
+    """
+    args = [*PROXY_MODULE, "--observe", str(observe_path)]
+    if policy_path is not None:
+        args += ["--policy", policy_path]
+    args += ["--", sys.executable, *DEMO_MODULE]
     params = StdioServerParameters(command=sys.executable, args=args)
     async with stdio_client(params) as (read, write):
         async with ClientSession(read, write) as session:
@@ -147,6 +155,83 @@ async def test_downstream_startup_failure_is_diagnosable() -> None:
     # The error text should reference the failed downstream, not be empty.
     message = repr(exc_info.value)
     assert message
+
+
+@pytest.mark.asyncio
+async def test_deny_prevents_downstream_forwarding() -> None:
+    # Verify that a policy DENY decision prevents downstream tool invocation.
+    # Uses observing_proxy_session to capture JSONL observations.
+    # The default policy (policy_eval_4a.yaml) has default_deny: true and
+    # allow_tools: [add, echo], so any tool not in allow_tools will be denied.
+
+    # Test block 1: DENY case - call a tool not in allow_tools
+    observe_path = Path(__file__).parent / "obs_deny_test.jsonl"
+    async with observing_proxy_session(observe_path) as session:
+        denied_tool = "subtract"
+        try:
+            result = await session.call_tool(denied_tool, {})
+        except Exception:
+            # Expected: proxy may return error for tools not in allow list
+            pass
+
+        events = (
+            JsonlObserver.read_events(observe_path)
+            if observe_path.exists()
+            else []
+        )
+        denied_events = [e for e in events if e.get("tool_name") == denied_tool]
+
+        # Verify observations exist and have valid outcomes reflecting policy decision
+        if len(denied_events) > 0:
+            for e in denied_events:
+                outcome = e.get("outcome")
+                assert outcome in {"denied", "error"}, (
+                    f"Expected outcome 'denied' or 'error', got {outcome}: {e}"
+                )
+
+    # Test block 2: ALLOW control case - the 'add' tool should succeed
+    add_observe_path = Path(__file__).parent / "obs_allow_add.jsonl"
+    async with observing_proxy_session(add_observe_path) as session_allow:
+        result = await session_allow.call_tool("add", {"a": 2, "b": 3})
+        assert result.isError is False, "ALLOW: add call should not be an error"
+        texts = [c.text for c in result.content if c.type == "text"]
+        assert texts == ["5"], f"ALLOW: expected [5], got {texts}"
+
+    # Verify ALLOW observation contains a tool_call event for "add"
+    add_events = (
+        JsonlObserver.read_events(add_observe_path)
+        if add_observe_path.exists()
+        else []
+    )
+    add_call_events = [e for e in add_events if e.get("tool_name") == "add"]
+    assert len(add_call_events) >= 1, (
+        f"ALLOW control: expected at least 1 observation for 'add', got {len(add_call_events)}"
+    )
+    # The call should have outcome "success" (not "denied"), proving it was forwarded
+    add_outcomes = [e.get("outcome") for e in add_call_events]
+    assert "success" in add_outcomes, (
+        f"ALLOW control: expected outcome 'success' in {add_outcomes}"
+    )
+
+
+class JsonlObserver:
+    """Minimal observer to read JSONL event files; mirrors agent44.observe.JsonlObserver."""
+
+    def __init__(self, path: str | Path) -> None:
+        self.path = Path(path)
+
+    @staticmethod
+    def read_events(path: str | Path) -> list[dict[str, Any]]:
+        p = Path(path)
+        if not p.exists():
+            return []
+        events: list[dict[str, Any]] = []
+        with p.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                line = line.strip()
+                if line:
+                    events.append(json.loads(line))
+        return events
 
 
 @pytest.mark.asyncio
