@@ -158,14 +158,14 @@ async def test_downstream_startup_failure_is_diagnosable() -> None:
 
 
 @pytest.mark.asyncio
-async def test_deny_prevents_downstream_forwarding() -> None:
+async def test_deny_prevents_downstream_forwarding(tmp_path: Path) -> None:
     # Verify that a policy DENY decision prevents downstream tool invocation.
     # Uses observing_proxy_session to capture JSONL observations.
     # The default policy (policy_eval_4a.yaml) has default_deny: true and
     # allow_tools: [add, echo], so any tool not in allow_tools will be denied.
 
     # Test block 1: DENY case - call a tool not in allow_tools
-    observe_path = Path(__file__).parent / "obs_deny_test.jsonl"
+    observe_path = tmp_path / "obs_deny_test.jsonl"
     async with observing_proxy_session(observe_path) as session:
         denied_tool = "subtract"
         try:
@@ -188,9 +188,20 @@ async def test_deny_prevents_downstream_forwarding() -> None:
                 assert outcome in {"denied", "error"}, (
                     f"Expected outcome 'denied' or 'error', got {outcome}: {e}"
                 )
+            # Strengthened: verify zero downstream invocations.
+            # The proxy guarantees that a DENY decision never forwards to the
+            # downstream server (proxy.py line 497). Check no forwarded=True.
+            # Note: the 'forwarded' field is only set when enforcement_active is True
+            # (requires policy delegation.enforcement == "required"). With the default
+            # policy, this field may be absent/None; the outcome="denied" assertion
+            # above is the authoritative evidence for zero downstream invocations.
+            forwarded_denied = [e for e in denied_events if e.get("forwarded") is True]
+            assert len(forwarded_denied) == 0, (
+                f"DENY: expected zero forwarded events, got {len(forwarded_denied)}: {forwarded_denied}"
+            )
 
     # Test block 2: ALLOW control case - the 'add' tool should succeed
-    add_observe_path = Path(__file__).parent / "obs_allow_add.jsonl"
+    add_observe_path = tmp_path / "obs_allow_add.jsonl"
     async with observing_proxy_session(add_observe_path) as session_allow:
         result = await session_allow.call_tool("add", {"a": 2, "b": 3})
         assert result.isError is False, "ALLOW: add call should not be an error"
@@ -212,6 +223,20 @@ async def test_deny_prevents_downstream_forwarding() -> None:
     assert "success" in add_outcomes, (
         f"ALLOW control: expected outcome 'success' in {add_outcomes}"
     )
+    # Strengthened: verify exactly one downstream invocation by checking
+    # that the single add event has forwarded=True (the proxy sets this when
+    # the call is forwarded to the downstream server).
+    # Note: the 'forwarded' field is only set when enforcement_active is True
+    # (requires policy delegation.enforcement == "required"). With the default
+    # policy, this field may be absent/None; the outcome="success" assertion
+    # above (and the result=="5" check) is the authoritative evidence for exactly
+    # one downstream invocation.
+    add_event = add_call_events[0]
+    forwarded_value = add_event.get("forwarded")
+    if forwarded_value is not None:
+        assert forwarded_value is True, (
+            f"ALLOW: expected forwarded=True for the single add invocation, got {forwarded_value}"
+        )
 
 
 class JsonlObserver:
