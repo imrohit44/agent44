@@ -14,7 +14,7 @@ dependencies = [
 ]
 
 [project.scripts]
-agent44 = "agent44.proxy:main"
+agent44 = "agent44.cli:main"
 
 [build-system]
 requires = ["hatchling"]
