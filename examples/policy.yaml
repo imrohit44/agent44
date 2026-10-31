@@ -1,0 +1,22 @@
+# Example policy for Agent44 Milestone 2 — MCP client integration
+# Demonstrates deterministic ALLOW/DENY enforcement between MCP client and server
+
+version: "1"
+name: agent44-integration-demo
+default_deny: true
+
+allow_tools:
+  - calculator
+  - read_document
+
+deny_tools:
+  - restricted_operation
+
+rules:
+  - id: deny-restricted-op
+    tool: restricted_operation
+    action: DENY
+    reason: "restricted_operation is not permitted in the demo policy"
+    when:
+      field: tool_name
+      equals: "restricted_operation"
