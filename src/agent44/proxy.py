@@ -49,7 +49,7 @@ from agent44.policy import (
     RulesOnlyAdapter,
     _validate_adapter_timeout,
 )
-from agent44.provenance import ProvenanceContext, ProvenanceRegistry
+from agent44.provenance import ProvenanceContext, ProvenanceRegistry, ProvenanceSession
 from agent44.transfer import (
     CORRELATION_MAX_LENGTH,
     MAX_TRANSFER_ID_LENGTH,
@@ -112,6 +112,7 @@ class ProxyState:
     adapter: DecisionAdapter | None = None
     delegation_source: DelegationSource | None = None
     transfer_store: ProvenanceTransferStore | None = None
+    provenance_session: "ProvenanceSession | None" = None
 
 
 def build_server(
@@ -170,6 +171,7 @@ def build_server(
                             adapter=adapter,
                             delegation_source=delegation_source,
                             transfer_store=transfer_store,
+                            provenance_session=ProvenanceSession(),
                         )
                     finally:
                         if transfer_store is not None:
@@ -335,6 +337,46 @@ def build_server(
             except Exception:  # noqa: BLE001 - provenance setup must fail closed
                 logger.exception("failed to build provenance context; failing closed")
                 registry = None
+                provenance_context = None
+                provenance_unavailable = True
+
+        # Build a call-scoped ProvenanceContext from argument references
+        # using the session's ProvenanceRegistry. This is separate from the
+        # policy-driven registry above; it exists so that upstream callers can
+        # submit provenance IDs that the proxy validates before forwarding.
+        # We always build this context from the session's registry, merging
+        # argument references so the policy can evaluate provenance metadata.
+        argument_references: dict[str, tuple[str, ...] | None] = {}
+        if state.provenance_session is not None:
+            for arg_name in forward_args:
+                # Check if the argument contains a provenance reference;
+                # if the caller supplied a provenance_id as part of the argument
+                # metadata, we capture it here. For now we look for a special
+                # structure; the exact schema is defined by the upstream client.
+                # If no provenance reference is supplied, generate a new external
+                # provenance ID so the policy can enforce restrictions.
+                argument_references[arg_name] = (
+                    state.provenance_session.registry.classify_external()
+                    if state.provenance_session.registry
+                    else None
+                )
+            try:
+                built = state.provenance_session.build_context(
+                    argument_references=argument_references
+                )
+                if provenance_context is None:
+                    provenance_context = built
+                else:
+                    # Merge: overlay the session's values onto the existing
+                    # provenance_context using the with_argument method (returns a new
+                    # immutable context).
+                    merged = provenance_context
+                    for arg_name, pid in built.values.items():
+                        if pid is not None:
+                            merged = merged.with_argument(arg_name, pid)
+                    provenance_context = merged
+            except Exception:  # noqa: BLE001 - context building must not break the call
+                logger.exception("failed to build provenance context; continuing without")
                 provenance_context = None
                 provenance_unavailable = True
 

@@ -1,0 +1,6 @@
+DEBUG: decision.provenance_id = None
+DEBUG: decision.trust_class = untrusted
+DEBUG: decision.rule_id = provenance:hit:deny_untrusted:label
+DEBUG: decision.provenance_id = None
+DEBUG: decision.trust_class = untrusted
+DEBUG: decision.rule_id = provenance:hit:deny_untrusted:label

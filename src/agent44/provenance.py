@@ -384,3 +384,103 @@ class ProvenanceContext:
         values[argument_name] = provenance_id
         return ProvenanceContext(registry=self.registry, values=values)
 
+
+class ProvenanceSession:
+    """Provenance state owned by one proxy session.
+
+    v1 architecture: exactly one ProvenanceSession per proxy process.
+    The session owns a ProvenanceRegistry and tracks provenance records
+    created within this session only.
+    """
+
+    def __init__(self) -> None:
+        self.registry: ProvenanceRegistry = ProvenanceRegistry()
+        self._closed = False
+        self._audit_events: list[dict[str, Any]] = []
+
+    def close(self) -> None:
+        """Close this provenance session. Idempotent."""
+        self._closed = True
+
+    def _require_open(self) -> None:
+        if self._closed:
+            raise ProvenanceError("provenance session is closed")
+
+    def record_output(
+        self,
+        *,
+        tool_name: str,
+        trust_class: TrustClass = TrustClass.UNTRUSTED,
+        source_category: str = "downstream_output",
+        parent_ids: tuple[str, ...] = (),
+        boundary: str = "downstream_output",
+    ) -> str:
+        """Create a provenance record for downstream tool output.
+
+        Returns the Agent44-generated provenance identifier.
+        """
+        self._require_open()
+        return self.registry._create(
+            trust_class=trust_class,
+            source_category=source_category,
+            parent_ids=tuple(parent_ids),
+            validation_transition=None,
+            boundary=boundary,
+            depth=1,
+        )
+
+    def validate_reference(self, provenance_id: str) -> ValidationResult:
+        """Validate a provenance reference against this session's registry.
+
+        Returns a ValidationResult with category and optional audit event id.
+        """
+        self._require_open()
+        record = self.registry.get_record(provenance_id)
+        if record is None:
+            audit_id = _new_provenance_id()
+            self._audit_events.append(
+                {
+                    "event": "provenance_reference_rejected",
+                    "provenance_id": provenance_id,
+                    "category": "unknown",
+                    "audit_event_id": audit_id,
+                }
+            )
+            return ValidationResult(
+                provenance_id=provenance_id,
+                valid=False,
+                category="unknown",
+                audit_event_id=audit_id,
+                message=f"provenance_id {provenance_id} not found in this session",
+            )
+        return ValidationResult(
+            provenance_id=provenance_id,
+            valid=True,
+            category="known",
+            audit_event_id=getattr(record, "audit_event_id", None),
+            message=f"provenance_id {provenance_id} validated",
+        )
+
+    def build_context(self, argument_references: dict[str, tuple[str, ...] | None]) -> ProvenanceContext | None:
+        """Build a ProvenanceContext from argument references.
+
+        For each argument, if a provenance reference is supplied, use it;
+        otherwise generate a new external provenance ID.
+        Uses this session's registry.
+        """
+        self._require_open()
+        if not argument_references:
+            return None
+        try:
+            values: dict[str, str | None] = {}
+            for arg_name in argument_references:
+                pid = argument_references[arg_name]
+                if pid is None:
+                    # Generate a new external provenance ID using the session's registry
+                    pid = self.registry.classify_external()
+                values[arg_name] = pid
+            return ProvenanceContext(registry=self.registry, values=values)
+        except Exception:
+            logger.exception("failed to build provenance context")
+            return None
+

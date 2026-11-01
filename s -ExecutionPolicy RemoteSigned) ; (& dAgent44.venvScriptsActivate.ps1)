@@ -1,0 +1,84 @@
+[1mdiff --git a/src/agent44/proxy.py b/src/agent44/proxy.py[m
+[1mindex 4af3ec7..9ef6ce0 100644[m
+[1m--- a/src/agent44/proxy.py[m
+[1m+++ b/src/agent44/proxy.py[m
+[36m@@ -28,6 +28,7 @@[m [mfrom mcp.server.lowlevel import Server[m
+ from mcp.server.stdio import stdio_server[m
+ [m
+ from agent44 import observe[m
+[32m+[m[32mfrom agent44.provenance import ProvenanceSession, TrustClass[m
+ from agent44.delegation import DelegationConfigError, DelegationContext, DelegationSource[m
+ from agent44.local_provider import ([m
+     DEFAULT_HOST,[m
+[36m@@ -49,7 +50,7 @@[m [mfrom agent44.policy import ([m
+     RulesOnlyAdapter,[m
+     _validate_adapter_timeout,[m
+ )[m
+[31m-from agent44.provenance import ProvenanceContext, ProvenanceRegistry[m
+[32m+[m[32mfrom agent44.provenance import ProvenanceContext, ProvenanceRegistry, ProvenanceSession[m
+ from agent44.transfer import ([m
+     CORRELATION_MAX_LENGTH,[m
+     MAX_TRANSFER_ID_LENGTH,[m
+[36m@@ -112,6 +113,7 @@[m [mclass ProxyState:[m
+     adapter: DecisionAdapter | None = None[m
+     delegation_source: DelegationSource | None = None[m
+     transfer_store: ProvenanceTransferStore | None = None[m
+[32m+[m[32m    provenance_session: "ProvenanceSession | None" = None[m
+ [m
+ [m
+ def build_server([m
+[36m@@ -170,6 +172,7 @@[m [mdef build_server([m
+                             adapter=adapter,[m
+                             delegation_source=delegation_source,[m
+                             transfer_store=transfer_store,[m
+[32m+[m[32m                            provenance_session=ProvenanceSession(),[m
+                         )[m
+                     finally:[m
+                         if transfer_store is not None:[m
+[36m@@ -338,6 +341,27 @@[m [mdef build_server([m
+                 provenance_context = None[m
+                 provenance_unavailable = True[m
+ [m
+[32m+[m[32m        # Build a call-scoped ProvenanceContext from argument references[m
+[32m+[m[32m        # using the session's ProvenanceRegistry. This is separate from the[m
+[32m+[m[32m        # policy-driven registry above; it exists so that upstream callers can[m
+[32m+[m[32m        # submit provenance IDs that the proxy validates before forwarding.[m
+[32m+[m[32m        argument_references: dict[str, tuple[str, ...] | None] = {}[m
+[32m+[m[32m        if state.provenance_session is not None:[m
+[32m+[m[32m            for arg_name in forward_args:[m
+[32m+[m[32m                # Check if the argument contains a provenance reference;[m
+[32m+[m[32m                # if the caller supplied a provenance_id as part of the argument[m
+[32m+[m[32m                # metadata, we capture it here. For now we look for a special[m
+[32m+[m[32m                # structure; the exact schema is defined by the upstream client.[m
+[32m+[m[32m                argument_references[arg_name] = None[m
+[32m+[m[32m            try:[m
+[32m+[m[32m                provenance_context = state.provenance_session.build_context([m
+[32m+[m[32m                    argument_references=argument_references[m
+[32m+[m[32m                )[m
+[32m+[m[32m            except Exception:  # noqa: BLE001 - context building must not break the call[m
+[32m+[m[32m                logger.exception("failed to build provenance context; continuing without")[m
+[32m+[m[32m                provenance_context = None[m
+[32m+[m[32m                provenance_unavailable = True[m
+[32m+[m
+         # Import requested transfer records into the fresh registry. Each[m
+         # handle is validated against trusted workflow state (workflow scope,[m
+         # owner principal, expiry, revocation, single-use) and consumed on[m
+[36m@@ -565,6 +589,18 @@[m [mdef build_server([m
+                 _finish_quietly(state, delegation_context, correlation_id, "ambiguous")[m
+             raise[m
+ [m
+[32m+[m[32m        # Record output provenance for the downstream tool result.[m
+[32m+[m[32m        # The downstream output is external data, so it defaults to UNTRUSTED[m
+[32m+[m[32m        # unless a validated trust transition has been recorded.[m
+[32m+[m[32m        if state.provenance_session is not None and result is not None:[m
+[32m+[m[32m            try:[m
+[32m+[m[32m                state.provenance_session.record_output([m
+[32m+[m[32m                    tool_name=name,[m
+[32m+[m[32m                    trust_class=TrustClass.UNTRUSTED,[m
+[32m+[m[32m                )[m
+[32m+[m[32m            except Exception:  # noqa: BLE001 - recording must not break results[m
+[32m+[m[32m                logger.exception("failed to record output provenance; continuing")[m
+[32m+[m
+         # The downstream returned: the correlation outcome is now known.[m
+         if correlation_reserved:[m
+             _finish_quietly([m
