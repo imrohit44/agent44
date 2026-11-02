@@ -5,13 +5,14 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "demo": "node --experimental-stdin --loader ts-node/esm demo/provenance-demo.ts"
+    "demo": "tsx demo/provenance-demo.ts"
   },
   "dependencies": {
-    "@mintlify/mcp": "^1.1.6"
+    "@modelcontextprotocol/sdk": "^1.12.0"
   },
   "devDependencies": {
     "typescript": "^5.5.0",
-    "@types/node": "^20.14.0"
+    "@types/node": "^20.14.0",
+    "tsx": "^4.7.0"
   }
 }

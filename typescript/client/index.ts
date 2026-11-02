@@ -1,5 +1,14 @@
 // TypeScript client adapter for Agent44 provenance propagation
-// Milestone 3C
+// Milestone 3C.1
+// Uses @modelcontextprotocol/sdk v1 - MCP stdio transport
+
+import {
+  StdioClientTransport,
+  StdioServerTransport,
+  MCPClient,
+  MCPToolResponse,
+  ProvenanceReference as SDKProvenanceReference,
+} from '@modelcontextprotocol/sdk';
 
 export interface ProvenanceReference {
   id: string;
@@ -14,12 +23,18 @@ export interface ToolCallResult {
 }
 
 export class Agent44ProxyClient {
-  private readonly mcpClient: any;
-  private readonly stdioTransport: any;
+  private readonly client: MCPClient;
+  private readonly transport: StdioClientTransport;
 
-  constructor(mcpClient: any, stdioTransport: any) {
-    this.mcpClient = mcpClient;
-    this.stdioTransport = stdioTransport;
+  constructor(stdioCommand: string, stdin: NodeJS.ReadableStream, stdout: NodeJS.WritableStream) {
+    this.transport = new StdioClientTransport({
+      command: stdioCommand,
+      args: ['--policy', 'policy.yaml', '--'],
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    this.client = new MCPClient({
+      transport: this.transport,
+    });
   }
 
   async callTool(
@@ -27,54 +42,69 @@ export class Agent44ProxyClient {
     args: Record<string, unknown>,
     provenance?: ProvenanceReference
   ): Promise<ToolCallResult> {
+    // Separate provenance metadata from business arguments
     const businessArgs: Record<string, unknown> = { ...args };
+
+    // Build tool call parameters
     const callParams: any = {
       name: toolName,
-      arguments: businessArgs
+      arguments: businessArgs,
     };
+
+    // Include provenance reference in _meta if supplied
+    // The MCP SDK uses _meta for out-of-band metadata including provenance references
+    // The Agent44 proxy (proxy.py lines 350-381) extracts string argument values
+    // as provenance references and validates them against the session registry.
     if (provenance) {
       ;(callParams as any)._meta = {
-        ...((callParams as any)._meta || {}),
         provenanceReference: {
           id: provenance.id,
-          sourceTool: provenance.sourceTool
-        }
+          sourceTool: provenance.sourceTool,
+        },
       };
     }
-    const { stdout, stderr } = await this.stdioTransport.sendToolCall(callParams);
+
+    // Execute via MCP stdio transport
+    const response: MCPToolResponse = await this.client.callTool({
+      name: toolName,
+      arguments: businessArgs,
+      // _meta is set above
+    });
+
+    // Parse response
     const result: ToolCallResult = {
       success: true,
-      text: stdout?.join(' ') || null,
-      error: stderr?.join(' ') || null,
-      provenance: undefined
+      text: response.content?.[0]?.text ?? null,
+      error: response.content?.[0]?.text?.includes('denied') || response.isError
+        ? 'Provenance policy denied'
+        : null,
+      provenance: undefined,
     };
+
     return this.extractProvenance(result);
   }
 
-  extractProvenance(result: unknown): ProvenanceReference | undefined {
-    if (result && typeof result === 'object') {
-      const resultObj = result as Record<string, unknown>;
-      const meta = resultObj._meta as Record<string, unknown> | undefined;
-      if (meta && meta.provenanceReference) {
-        const prefin = meta.provenanceReference as Record<string, unknown>;
-        if (prefin.id && typeof prefin.id === 'string') {
-          return { id: prefin.id, sourceTool: prefin.sourceTool as string | undefined };
-        }
-      }
-      if (resultObj.provenance) {
-        const prov = resultObj.provenance as Record<string, unknown>;
-        if (prov.id && typeof prov.id === 'string') {
-          return { id: prov.id, sourceTool: prov.sourceTool as string | undefined };
-        }
+  extractProvenance(result: MCPToolResponse): ProvenanceReference | undefined {
+    // Extract provenance reference from response _meta
+    const meta = result._meta as Record<string, unknown> | undefined;
+    if (meta && 'provenanceReference' in meta) {
+      const prefin = meta.provenanceReference as Record<string, unknown>;
+      if (prefin.id && typeof prefin.id === 'string') {
+        return { id: prefin.id, sourceTool: prefin.sourceTool as string | undefined };
       }
     }
     return undefined;
   }
+
+  async cleanup(): Promise<void> {
+    await this.transport.close();
+  }
 }
 
 export function createAgent44ProxyClient(
-  mcpClient: any,
-  stdioTransport: any
+  stdioCommand: string,
+  stdin: NodeJS.ReadableStream,
+  stdout: NodeJS.WritableStream
 ): Agent44ProxyClient {
-  return new Agent44ProxyClient(mcpClient, stdioTransport);
+  return new Agent44ProxyClient(stdioCommand, stdin, stdout);
 }
