@@ -1,6 +1,6 @@
 import sys
 sys.path.insert(0, 'src')
-from agent44.provenance import ProvenanceSession, TrustClass, ProvenanceError
+from agent44.provenance import ProvenanceSession, TrustClass, ProvenanceError, ValidationResult
 
 s = ProvenanceSession()
 pid = s.record_output(tool_name="test_tool", trust_class=TrustClass.UNTRUSTED)

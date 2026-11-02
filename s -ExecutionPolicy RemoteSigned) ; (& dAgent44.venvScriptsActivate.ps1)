@@ -1,84 +1,108 @@
-[1mdiff --git a/src/agent44/proxy.py b/src/agent44/proxy.py[m
-[1mindex 4af3ec7..9ef6ce0 100644[m
-[1m--- a/src/agent44/proxy.py[m
-[1m+++ b/src/agent44/proxy.py[m
-[36m@@ -28,6 +28,7 @@[m [mfrom mcp.server.lowlevel import Server[m
- from mcp.server.stdio import stdio_server[m
+[1mdiff --git a/src/agent44/provenance.py b/src/agent44/provenance.py[m
+[1mindex ab17701..29d8d16 100644[m
+[1m--- a/src/agent44/provenance.py[m
+[1m+++ b/src/agent44/provenance.py[m
+[36m@@ -384,3 +384,103 @@[m [mclass ProvenanceContext:[m
+         values[argument_name] = provenance_id[m
+         return ProvenanceContext(registry=self.registry, values=values)[m
  [m
- from agent44 import observe[m
-[32m+[m[32mfrom agent44.provenance import ProvenanceSession, TrustClass[m
- from agent44.delegation import DelegationConfigError, DelegationContext, DelegationSource[m
- from agent44.local_provider import ([m
-     DEFAULT_HOST,[m
-[36m@@ -49,7 +50,7 @@[m [mfrom agent44.policy import ([m
-     RulesOnlyAdapter,[m
-     _validate_adapter_timeout,[m
- )[m
-[31m-from agent44.provenance import ProvenanceContext, ProvenanceRegistry[m
-[32m+[m[32mfrom agent44.provenance import ProvenanceContext, ProvenanceRegistry, ProvenanceSession[m
- from agent44.transfer import ([m
-     CORRELATION_MAX_LENGTH,[m
-     MAX_TRANSFER_ID_LENGTH,[m
-[36m@@ -112,6 +113,7 @@[m [mclass ProxyState:[m
-     adapter: DecisionAdapter | None = None[m
-     delegation_source: DelegationSource | None = None[m
-     transfer_store: ProvenanceTransferStore | None = None[m
-[32m+[m[32m    provenance_session: "ProvenanceSession | None" = None[m
- [m
- [m
- def build_server([m
-[36m@@ -170,6 +172,7 @@[m [mdef build_server([m
-                             adapter=adapter,[m
-                             delegation_source=delegation_source,[m
-                             transfer_store=transfer_store,[m
-[32m+[m[32m                            provenance_session=ProvenanceSession(),[m
-                         )[m
-                     finally:[m
-                         if transfer_store is not None:[m
-[36m@@ -338,6 +341,27 @@[m [mdef build_server([m
-                 provenance_context = None[m
-                 provenance_unavailable = True[m
- [m
-[32m+[m[32m        # Build a call-scoped ProvenanceContext from argument references[m
-[32m+[m[32m        # using the session's ProvenanceRegistry. This is separate from the[m
-[32m+[m[32m        # policy-driven registry above; it exists so that upstream callers can[m
-[32m+[m[32m        # submit provenance IDs that the proxy validates before forwarding.[m
-[32m+[m[32m        argument_references: dict[str, tuple[str, ...] | None] = {}[m
-[32m+[m[32m        if state.provenance_session is not None:[m
-[32m+[m[32m            for arg_name in forward_args:[m
-[32m+[m[32m                # Check if the argument contains a provenance reference;[m
-[32m+[m[32m                # if the caller supplied a provenance_id as part of the argument[m
-[32m+[m[32m                # metadata, we capture it here. For now we look for a special[m
-[32m+[m[32m                # structure; the exact schema is defined by the upstream client.[m
-[32m+[m[32m                argument_references[arg_name] = None[m
-[32m+[m[32m            try:[m
-[32m+[m[32m                provenance_context = state.provenance_session.build_context([m
-[32m+[m[32m                    argument_references=argument_references[m
-[32m+[m[32m                )[m
-[32m+[m[32m            except Exception:  # noqa: BLE001 - context building must not break the call[m
-[32m+[m[32m                logger.exception("failed to build provenance context; continuing without")[m
-[32m+[m[32m                provenance_context = None[m
-[32m+[m[32m                provenance_unavailable = True[m
 [32m+[m
-         # Import requested transfer records into the fresh registry. Each[m
-         # handle is validated against trusted workflow state (workflow scope,[m
-         # owner principal, expiry, revocation, single-use) and consumed on[m
-[36m@@ -565,6 +589,18 @@[m [mdef build_server([m
-                 _finish_quietly(state, delegation_context, correlation_id, "ambiguous")[m
-             raise[m
- [m
-[32m+[m[32m        # Record output provenance for the downstream tool result.[m
-[32m+[m[32m        # The downstream output is external data, so it defaults to UNTRUSTED[m
-[32m+[m[32m        # unless a validated trust transition has been recorded.[m
-[32m+[m[32m        if state.provenance_session is not None and result is not None:[m
-[32m+[m[32m            try:[m
-[32m+[m[32m                state.provenance_session.record_output([m
-[32m+[m[32m                    tool_name=name,[m
-[32m+[m[32m                    trust_class=TrustClass.UNTRUSTED,[m
-[32m+[m[32m                )[m
-[32m+[m[32m            except Exception:  # noqa: BLE001 - recording must not break results[m
-[32m+[m[32m                logger.exception("failed to record output provenance; continuing")[m
+[32m+[m[32mclass ProvenanceSession:[m
+[32m+[m[32m    """Provenance state owned by one proxy session.[m
 [32m+[m
-         # The downstream returned: the correlation outcome is now known.[m
-         if correlation_reserved:[m
-             _finish_quietly([m
+[32m+[m[32m    v1 architecture: exactly one ProvenanceSession per proxy process.[m
+[32m+[m[32m    The session owns a ProvenanceRegistry and tracks provenance records[m
+[32m+[m[32m    created within this session only.[m
+[32m+[m[32m    """[m
+[32m+[m
+[32m+[m[32m    def __init__(self) -> None:[m
+[32m+[m[32m        self.registry: ProvenanceRegistry = ProvenanceRegistry()[m
+[32m+[m[32m        self._closed = False[m
+[32m+[m[32m        self._audit_events: list[dict[str, Any]] = [][m
+[32m+[m
+[32m+[m[32m    def close(self) -> None:[m
+[32m+[m[32m        """Close this provenance session. Idempotent."""[m
+[32m+[m[32m        self._closed = True[m
+[32m+[m
+[32m+[m[32m    def _require_open(self) -> None:[m
+[32m+[m[32m        if self._closed:[m
+[32m+[m[32m            raise ProvenanceError("provenance session is closed")[m
+[32m+[m
+[32m+[m[32m    def record_output([m
+[32m+[m[32m        self,[m
+[32m+[m[32m        *,[m
+[32m+[m[32m        tool_name: str,[m
+[32m+[m[32m        trust_class: TrustClass = TrustClass.UNTRUSTED,[m
+[32m+[m[32m        source_category: str = "downstream_output",[m
+[32m+[m[32m        parent_ids: tuple[str, ...] = (),[m
+[32m+[m[32m        boundary: str = "downstream_output",[m
+[32m+[m[32m    ) -> str:[m
+[32m+[m[32m        """Create a provenance record for downstream tool output.[m
+[32m+[m
+[32m+[m[32m        Returns the Agent44-generated provenance identifier.[m
+[32m+[m[32m        """[m
+[32m+[m[32m        self._require_open()[m
+[32m+[m[32m        return self.registry._create([m
+[32m+[m[32m            trust_class=trust_class,[m
+[32m+[m[32m            source_category=source_category,[m
+[32m+[m[32m            parent_ids=tuple(parent_ids),[m
+[32m+[m[32m            validation_transition=None,[m
+[32m+[m[32m            boundary=boundary,[m
+[32m+[m[32m            depth=1,[m
+[32m+[m[32m        )[m
+[32m+[m
+[32m+[m[32m    def validate_reference(self, provenance_id: str) -> ValidationResult:[m
+[32m+[m[32m        """Validate a provenance reference against this session's registry.[m
+[32m+[m
+[32m+[m[32m        Returns a ValidationResult with category and optional audit event id.[m
+[32m+[m[32m        """[m
+[32m+[m[32m        self._require_open()[m
+[32m+[m[32m        record = self.registry.get_record(provenance_id)[m
+[32m+[m[32m        if record is None:[m
+[32m+[m[32m            audit_id = _new_provenance_id()[m
+[32m+[m[32m            self._audit_events.append([m
+[32m+[m[32m                {[m
+[32m+[m[32m                    "event": "provenance_reference_rejected",[m
+[32m+[m[32m                    "provenance_id": provenance_id,[m
+[32m+[m[32m                    "category": "unknown",[m
+[32m+[m[32m                    "audit_event_id": audit_id,[m
+[32m+[m[32m                }[m
+[32m+[m[32m            )[m
+[32m+[m[32m            return ValidationResult([m
+[32m+[m[32m                provenance_id=provenance_id,[m
+[32m+[m[32m                valid=False,[m
+[32m+[m[32m                category="unknown",[m
+[32m+[m[32m                audit_event_id=audit_id,[m
+[32m+[m[32m                message=f"provenance_id {provenance_id} not found in this session",[m
+[32m+[m[32m            )[m
+[32m+[m[32m        return ValidationResult([m
+[32m+[m[32m            provenance_id=provenance_id,[m
+[32m+[m[32m            valid=True,[m
+[32m+[m[32m            category="known",[m
+[32m+[m[32m            audit_event_id=getattr(record, "audit_event_id", None),[m
+[32m+[m[32m            message=f"provenance_id {provenance_id} validated",[m
+[32m+[m[32m        )[m
+[32m+[m
+[32m+[m[32m    def build_context(self, argument_references: dict[str, tuple[str, ...] | None]) -> ProvenanceContext | None:[m
+[32m+[m[32m        """Build a ProvenanceContext from argument references.[m
+[32m+[m
+[32m+[m[32m        For each argument, if a provenance reference is supplied, use it;[m
+[32m+[m[32m        otherwise generate a new external provenance ID.[m
+[32m+[m[32m        Uses this session's registry.[m
+[32m+[m[32m        """[m
+[32m+[m[32m        self._require_open()[m
+[32m+[m[32m        if not argument_references:[m
+[32m+[m[32m            return None[m
+[32m+[m[32m        try:[m
+[32m+[m[32m            values: dict[str, str | None] = {}[m
+[32m+[m[32m            for arg_name in argument_references:[m
+[32m+[m[32m                pid = argument_references[arg_name][m
+[32m+[m[32m                if pid is None:[m
+[32m+[m[32m                    # Generate a new external provenance ID using the session's registry[m
+[32m+[m[32m                    pid = self.registry.classify_external()[m
+[32m+[m[32m                values[arg_name] = pid[m
+[32m+[m[32m            return ProvenanceContext(registry=self.registry, values=values)[m
+[32m+[m[32m        except Exception:[m
+[32m+[m[32m            logger.exception("failed to build provenance context")[m
+[32m+[m[32m            return None[m
+[32m+[m

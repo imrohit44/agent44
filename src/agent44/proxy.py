@@ -355,11 +355,22 @@ def build_server(
                 # structure; the exact schema is defined by the upstream client.
                 # If no provenance reference is supplied, generate a new external
                 # provenance ID so the policy can enforce restrictions.
-                argument_references[arg_name] = (
-                    state.provenance_session.registry.classify_external()
-                    if state.provenance_session.registry
-                    else None
-                )
+                # Check if the caller supplied a provenance reference as an
+                # argument value. If the argument is a non-empty string, treat
+                # it as a provenance reference to extract and validate. Otherwise,
+                # generate a new external provenance ID.
+                arg_value = forward_args.get(arg_name)
+                if arg_value is not None and isinstance(arg_value, str) and arg_value:
+                    # Caller supplied a provenance reference string;
+                    # use it directly as the argument reference.
+                    argument_references[arg_name] = arg_value
+                else:
+                    # Generate a new external provenance ID
+                    argument_references[arg_name] = (
+                        state.provenance_session.registry.classify_external()
+                        if state.provenance_session.registry
+                        else None
+                    )
             try:
                 built = state.provenance_session.build_context(
                     argument_references=argument_references
