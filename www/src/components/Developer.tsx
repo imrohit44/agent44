@@ -10,7 +10,7 @@ const Developer = () => {
             <h3 className="text-2xl font-bold mb-6">Python Project Setup</h3>
             <ol className="space-y-3 text-muted/80 text-sm">
               <li>pip install agent44 — Install the Agent44 proxy package</li>
-              <li>agent44 proxy --policy policy.yaml -- <downstream-tools> — Start the proxy</li>
+              <li>agent44 proxy --policy policy.yaml -- <code>downstream-tools</code> — Start the proxy</li>
               <li>Configure policy file with enforcement: required or enforcement: off</li>
               <li>Use the provenance API: registry.classify_external(), registry.validate_reference(pid)</li>
             </ol>
