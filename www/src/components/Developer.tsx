@@ -19,7 +19,7 @@ const Developer = () => {
             <h3 className="text-2xl font-bold mb-6">TypeScript Client Installation</h3>
             <ol className="space-y-3 text-muted/80 text-sm">
               <li>npm install agent44-ts-client — Install the TypeScript client (package currently implemented, build/typecheck/package archive verification pending)</li>
-              <li>import { createAgent44ProxyClient } from 'agent44-ts-client'</li>
+              <li><code>{"import { createAgent44ProxyClient } from 'agent44-ts-client'"}</code></li>
               <li>Initialize with stdio transport: createAgent44ProxyClient('agent44-proxy', stdin, stdout)</li>
               <li>Call tools with optional provenance: client.callTool('toolName', { /* args */ }, provenanceRef)</li>
             </ol>
