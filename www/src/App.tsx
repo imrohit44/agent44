@@ -15,14 +15,13 @@ const routes = () => (
   <Router>
     <Nav />
     <Routes>
-      <Route path="/" element={<>}>
-        <Route index element={<><Hero /><Problem /></>} />
-        <Route path="architecture" element={<Architecture />} />
-        <Route path="policy" element={<PolicyEngine />} />
-        <Route path="provenance" element={<Provenance />} />
-        <Route path="evaluation" element={<Evaluation />} />
-        <Route path="github" element={<Developer />} />
-      </Route>
+      <Route path="/" element={<Hero />} />
+      <Route path="problem" element={<Problem />} />
+      <Route path="architecture" element={<Architecture />} />
+      <Route path="policy" element={<PolicyEngine />} />
+      <Route path="provenance" element={<Provenance />} />
+      <Route path="evaluation" element={<Evaluation />} />
+      <Route path="github" element={<Developer />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   </Router>

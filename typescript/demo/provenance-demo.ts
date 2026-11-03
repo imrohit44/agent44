@@ -2,7 +2,6 @@
 // Milestone 3C - Agent44 MCP client integration
 
 import { createAgent44ProxyClient } from '../client';
-import { StdioTransport } from 'mcp';
 
 // Demonstrate provenance propagation through Agent44:
 // 1. Call Tool A through Agent44
@@ -16,9 +15,9 @@ async function main() {
   const transport = new StdioTransport({
     command: 'agent44-proxy',
     args: ['--policy', 'policy.yaml', '--', 'tool-a', 'tool-b']
-  };
+  }
 
-  const client = createAgent44ProxyClient(/* mcp client */ transport);
+  const client = createAgent44ProxyClient(transport);
 
   // Step 1: Call Tool A
   console.log('Step 1: Calling Tool A...');
@@ -78,4 +77,3 @@ main().catch((err) => {
   console.error('Demo failed:', err);
   process.exit(1);
 });
-'''
