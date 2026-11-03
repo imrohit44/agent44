@@ -1,0 +1,10 @@
+dist/
+*.log
+*.lock
+npm-debug.log*
+.yarn/cache/
+test-results/
+*.py
+tests/
+*.test.*
+*.spec.*

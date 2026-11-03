@@ -2,10 +2,31 @@
   "name": "agent44-ts-client",
   "version": "1.0.0",
   "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "description": "TypeScript client for Agent44 MCP proxy with provenance propagation",
+  "keywords": [
+    "mcp",
+    "agent44",
+    "provenance",
+    "proxy",
+    "typescript"
+  ],
+  "author": "Agent44 Team",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "demo": "tsx demo/provenance-demo.ts"
+    "demo": "tsx demo/provenance-demo.ts",
+    "test": "echo \"No tests yet\" && exit 0"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0"
