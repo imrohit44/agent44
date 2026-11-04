@@ -1,20 +1,22 @@
-"""Offline Phase 9 release-check workflow.
+"""Offline local validation gate for the Agent44 repository.
 
-Run with:  python release_check.py
+Run with:  uv run python scripts/release_check.py
 
-Checks: assemble.py produces no unexpected changes, full pytest passes,
-ruff output matches pre-existing baseline, packaging/import sanity, and
-frozen-file hashes unchanged. No network, no vendor calls, fully offline.
+Checks: assembly produces no unexpected changes, full pytest passes, Ruff
+output matches the checked-in baseline, imports work, and evaluation files
+are unchanged or match the available frozen-file manifest. No network, no
+vendor calls, fully offline.
 """
 
 from __future__ import annotations
 
+import difflib
 import hashlib
 import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1]
 BASELINE_RUFF = ROOT / ".ruff_baseline.json"
 FROZEN_HASHES = ROOT / ".phase9_start_hashes.txt"
 
@@ -35,9 +37,10 @@ def hash_directory(directory):
 
 def step1_assemble():
     print("=== Step 1: assemble.py ===")
-    before = hash_directory(ROOT / "src" / "agent44")
-    result = run([sys.executable, "assemble.py"], check=False)
-    after = hash_directory(ROOT / "src" / "agent44")
+    source_directory = ROOT / "src" / "agent44"
+    before = hash_directory(source_directory)
+    result = run([sys.executable, "scripts/assemble.py"], check=False)
+    after = hash_directory(source_directory)
     if before != after:
         print("FAIL: assemble.py changed files under src/agent44/")
         return False
@@ -69,26 +72,34 @@ def step3_ruff_diff():
     print("=== Step 3: ruff diff ===")
     result = run([sys.executable, "-m", "ruff", "check", "src/", "tests/"], check=False)
     current_output = result.stdout + result.stderr
-    if BASELINE_RUFF.exists():
-        baseline = BASELINE_RUFF.read_text()
-    else:
-        print("  (no baseline; creating one from current output)")
-        BASELINE_RUFF.write_text(current_output)
-        print("PASS: baseline created (first run)")
-        return True
+    if not BASELINE_RUFF.exists():
+        print(f"FAIL: Ruff baseline not found: {BASELINE_RUFF}")
+        return False
+    baseline = BASELINE_RUFF.read_text()
+    if not baseline.strip():
+        print(f"FAIL: Ruff baseline is empty: {BASELINE_RUFF}")
+        return False
     if current_output == baseline:
         print("PASS: ruff output matches pre-existing baseline (no new issues)")
         return True
     print("FAIL: ruff output differs from pre-existing baseline")
-    print("--- baseline ---")
-    print(baseline[:2000])
-    print("--- current ---")
-    print(current_output[:2000])
+    diff = list(
+        difflib.unified_diff(
+            baseline.splitlines(),
+            current_output.splitlines(),
+            fromfile=str(BASELINE_RUFF),
+            tofile="current Ruff output",
+            lineterm="",
+        )
+    )
+    print("\n".join(diff[:120]))
+    if len(diff) > 120:
+        print(f"... diff truncated ({len(diff)} lines total)")
     return False
 
 
-def step4_packaging_import():
-    print("=== Step 4: packaging/import sanity ===")
+def step4_import_sanity():
+    print("=== Step 4: import sanity ===")
     modules = [
         "agent44",
         "agent44.policy",
@@ -121,9 +132,25 @@ def step4_packaging_import():
 
 
 def step5_frozen_hashes():
-    print("=== Step 5: frozen-file hashes ===")
+    print("=== Step 5: frozen-file integrity ===")
     if not FROZEN_HASHES.exists():
-        print("SKIP: .phase9_start_hashes.txt not found")
+        result = run(
+            ["git", "status", "--porcelain", "--", "evaluation/"],
+            check=False,
+        )
+        if result.returncode != 0:
+            print("FAIL: unable to inspect evaluation working-tree status")
+            print(result.stderr)
+            return False
+        if result.stdout.strip():
+            print("FAIL: evaluation files differ from the committed working-tree baseline")
+            print(result.stdout)
+            return False
+        print(
+            "PASS: evaluation/ has no working-tree changes; "
+            "historical .phase9_start_hashes.txt is not present, "
+            "so Phase 9 hashes were not checked"
+        )
         return True
     expected = {}
     raw = FROZEN_HASHES.read_bytes()
@@ -138,6 +165,9 @@ def step5_frozen_hashes():
         parts = line.split(None, 1)
         if len(parts) == 2:
             expected[parts[1]] = parts[0]
+    if not expected:
+        print("FAIL: frozen-file hash manifest contains no usable entries")
+        return False
     mismatches = []
     for rel_path, expected_hash in expected.items():
         full_path = ROOT / rel_path
@@ -161,8 +191,8 @@ def main():
         ("assemble.py no unexpected changes", step1_assemble),
         ("full pytest", step2_pytest),
         ("ruff diff vs baseline", step3_ruff_diff),
-        ("packaging/import sanity", step4_packaging_import),
-        ("frozen-file hashes", step5_frozen_hashes),
+        ("import sanity", step4_import_sanity),
+        ("frozen-file integrity", step5_frozen_hashes),
     ]
     passed = 0
     failed = 0

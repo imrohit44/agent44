@@ -80,10 +80,26 @@ scenario labels/rationale when adding a scenario. Do not alter frozen
 evaluation configuration, corpus, or result files without the required
 authorization and review.
 
-The checked-in `scripts/release_check.py` currently expects a root
-`assemble.py`, which is absent from this checkout; treat that script as an
-unavailable release gate until repaired. Its hash check verifies existing
-files and does not update frozen hashes.
+Run the local validation gate from the repository root with:
+
+```powershell
+uv run python scripts/release_check.py
+```
+
+It regenerates `src/agent44/benchmark.py` from the benchmark fragments and
+fails if the generated source changes, runs the Python tests, compares Ruff
+output with the checked-in baseline, and performs import checks. The historical
+Phase 9 hash manifest is not present in the current repository. In its
+absence, the gate checks that `evaluation/` has no working-tree changes; this
+is not a historical hash verification. The gate does not build or publish
+distributions and does not establish release readiness on its own.
+There is no `.github/workflows/` release workflow in this checkout, so this
+local gate is not run automatically by GitHub.
+
+The Python wheel and source distribution can be built locally with
+`uv build --wheel --sdist`. The TypeScript package is independently built from
+`typescript/`; see [TypeScript Client](typescript-client.md). Neither command
+publishes artifacts.
 
 ## Evaluation and documentation workflow
 

@@ -1,12 +1,17 @@
-import io
+from pathlib import Path
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SCRIPT_DIR.parent
 
 
 def rd(name):
-    return io.open(name, encoding="utf-8").read().splitlines(keepends=True)
+    with open(SCRIPT_DIR / name, encoding="utf-8") as source:
+        return source.read().splitlines(keepends=True)
 
 
 def rw(name, text):
-    io.open(name, "w", encoding="utf-8").write(text)
+    with open(REPO_ROOT / name, "w", encoding="utf-8") as destination:
+        destination.write(text)
 
 
 # bench_S3a: drop the premature tuple-closing ')' (bench_S3b continues the tuple).

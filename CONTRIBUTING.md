@@ -26,10 +26,18 @@ See the `README.md` for the project overview and setup instructions.
 
 ## Release Check
 
-The repository contains `scripts/release_check.py`, but its current implementation
-expects a root-level `assemble.py`, which is not present in this checkout. Do not
-treat that script as a working release gate until its assumptions are repaired.
-For routine Python validation, run the test and lint commands above.
+From the repository root, run the offline local validation gate with
+`uv run python scripts/release_check.py`. It checks generated benchmark-source
+drift, the Python test suite, the Ruff baseline, imports, and evaluation-tree
+working-copy status. The historical Phase 9 hash manifest is absent, so the
+evaluation check is not a historical hash verification. The gate does not
+build distributions or perform publication steps; it is not, by itself, a
+complete release-readiness check.
+
+Build Python distributions locally with `uv build --wheel --sdist`. Build and
+inspect the TypeScript package from `typescript/`; see
+[`docs/typescript-client.md`](docs/typescript-client.md). Do not publish
+artifacts as part of local validation.
 
 ## Questions or Discussion
 
