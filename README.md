@@ -1,4 +1,4 @@
-# Agent44 — A Decision Layer for AI Agent Tool Calls
+# Agent44 - A Decision Layer for AI Agent Tool Calls
 
 Agent44 is an engineering experiment in enforcing policy at the MCP tool-call
 boundary. AI agents can invoke tools, but deciding whether a call may execute
@@ -11,6 +11,35 @@ The project explores deterministic policy first, with optional model-based
 decisions only for explicitly configured unresolved calls. It does not claim
 that a policy decision layer prevents every attack or secures an entire agent
 application.
+
+## Repository layout
+
+```text
+.
+├── README.md             Project overview, quickstart, evaluation, and status
+├── CONTRIBUTING.md       Contribution workflow
+├── LICENSE              Apache-2.0 project license
+├── pyproject.toml        Python package, test, and lint configuration
+├── .gitignore            Generated files and local dependencies
+├── src/agent44/          Python package: proxy, policy, provenance, evaluation
+├── tests/                Python unit and integration tests plus test servers
+├── examples/             Standalone MCP demo server and policy
+├── evaluation/           Frozen protocols, policies, reports, and run results
+│   ├── phase10_runs/     Preserved Phase 10 JSON results
+│   └── reports/          Additional evaluation output
+├── docs/                 Architecture, policy, provenance, and developer guides
+├── scripts/              Benchmark source fragments, demos, and maintenance tools
+├── typescript/           Independent TypeScript client package
+│   ├── client/
+│   └── demo/
+└── www/                  Separate React/Vite website project
+```
+
+The evaluation corpus implementation lives in `src/agent44/corpus.py`; the
+`evaluation/` directory contains evaluation policies, protocols, and artifacts.
+Each JavaScript project has its own manifest and lockfile. Installed
+`node_modules/` directories are local generated dependencies and are not part
+of the source tree.
 
 ## Problem and motivation
 
@@ -216,6 +245,9 @@ not evidence of end-to-end attack prevention.
 - **TypeScript client:** source exists, but its test only checks basic API
   shapes. The current typecheck fails on syntax in the demo; the MCP
   `_meta.provenanceReference` path is not integrated into the Python proxy.
+  Its package manifest targets `dist/index.js`, while the TypeScript config
+  places `client/index.ts` output under `dist/client/`; the declared targets
+  are absent and no package build is verified.
 - **Website:** a private Vite/React source project exists under `www/`. Its
   current production build does not pass because the package's build script
   invokes `tsc` without a project configuration in that directory. Deployment

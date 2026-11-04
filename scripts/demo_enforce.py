@@ -22,7 +22,7 @@ async def main() -> int:
         "--observe",
         str(OBS),
         "--policy",
-        str(ROOT / "policies" / "demo.yaml"),
+        str(ROOT.parent / "evaluation" / "demo.yaml"),
         "--",
         sys.executable,
         "-m",

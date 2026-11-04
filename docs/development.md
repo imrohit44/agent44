@@ -52,7 +52,9 @@ npm run typecheck
 
 The API-shape test passes in the current checkout; the typecheck currently
 fails because `demo/provenance-demo.ts` has a syntax error. The package is not
-verified as an end-to-end client and no npm publication is established. See
+verified as an end-to-end client; its declared `dist/` export paths also do
+not match the configured `dist/client/` output path. No npm publication is
+established. See
 [TypeScript Client](typescript-client.md).
 
 ## Website development
@@ -99,8 +101,9 @@ authorizes a change. See [Evaluation](evaluation.md).
 
 ## Validation notes
 
-The README is UTF-8 so it can be read by the configured Python build backend.
-The targeted Python test selection used during this documentation task passed
-(135 tests); the full suite was not run. Current TypeScript and website
-verification details are recorded in [TypeScript Client](typescript-client.md)
-and [Project Status in the README](../README.md#project-status).
+After restructuring, the full Python suite passed locally (`uv run pytest -q`:
+538 passed). Pytest emitted an existing `pytest-asyncio` deprecation warning
+because the async fixture loop scope is not configured explicitly. Current
+TypeScript and website verification details are recorded in
+[TypeScript Client](typescript-client.md) and
+[Project Status in the README](../README.md#project-status).

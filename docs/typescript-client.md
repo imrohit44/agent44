@@ -99,6 +99,11 @@ used to claim interoperable provenance enforcement. See
   checks; it is not an integration test.
 - `npm run typecheck` currently fails due to malformed syntax in the demo
   source included by `tsconfig.json`.
+- The package manifest points to `dist/index.js`, `dist/index.cjs.js`, and
+  `dist/index.d.ts`. With `rootDir: "./"` and `outDir: "./dist"`, the client
+  entry source is emitted under `dist/client/`; the manifest targets are
+  absent in the current checkout. Because typechecking fails first, a
+  successful package build and its emitted files are not verified.
 - No successful package build or npm publication was verified.
 - The package manifest's MIT declaration differs from the root Apache-2.0
   license and requires maintainer resolution.

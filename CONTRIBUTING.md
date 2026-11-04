@@ -13,7 +13,7 @@ See the `README.md` for the project overview and setup instructions.
 
 - Follow the existing code style in the repository
 - Run `uv run ruff check src/ tests/` before committing
-- Add new synthetic scenarios in the `evaluation/` directory following the existing pattern
+- Add synthetic scenarios to `src/agent44/corpus.py` following the existing pattern; keep frozen evaluation artifacts unchanged
 - Preserve frozen evaluation files; hash manifests verify integrity and are not an update mechanism
 - Maintain the deterministic policy engine's fail-closed behavior
 
