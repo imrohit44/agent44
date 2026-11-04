@@ -228,14 +228,15 @@ The frozen Phase 10 report records:
 The judge was consulted for six adapter-eligible scenarios, for 18 total local
 model calls. It changed four outcomes from the rules-only unresolved/deny
 fallback to `ALLOW`; all four were false allows relative to the registered
-expected labels. See the frozen
+expected labels. The frozen outputs distinguish label-based counts (rules-only
+JSON: `0/16` benign-labeled calls blocked; `33/43` malicious-labeled calls
+denied) from Phase 10 category-eligibility metrics (report: `0/14` false
+blocks; attack-block N/A). The attack-category eligibility mapping is not
+reconstructible from the frozen materials, so these attack figures are not
+interchangeable or evidence of end-to-end attack prevention. See the
 [Phase 10 report](evaluation/PHASE_10_BACKEND_EVALUATION_REPORT.md) and
-[evaluation guide](docs/evaluation.md) for metric definitions and important
-inconsistencies between that report and the JSON artifacts. For example, the
-report lists rules-only false blocks as `0/14` and attack-block rate as not
-applicable, while the rules-only JSON lists `0/16` false blocks and `33/43`
-malicious-labeled calls blocked. These are unresolved per-call corpus metrics,
-not evidence of end-to-end attack prevention.
+[metric reconciliation](docs/evaluation.md#phase-10-metric-reconciliation)
+for definitions and limits.
 
 ## Project status
 
