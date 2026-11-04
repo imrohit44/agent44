@@ -45,7 +45,7 @@ export class Agent44ProxyClient {
     // Separate provenance metadata from business arguments
     const businessArgs: Record<string, unknown> = { ...args };
 
-    // Build tool call parameters
+    // Build tool call parameters with optional _meta for provenance
     const callParams: any = {
       name: toolName,
       arguments: businessArgs,
@@ -53,10 +53,10 @@ export class Agent44ProxyClient {
 
     // Include provenance reference in _meta if supplied
     // The MCP SDK uses _meta for out-of-band metadata including provenance references
-    // The Agent44 proxy (proxy.py lines 350-381) extracts string argument values
+    // The Agent44 proxy (proxy.py) extracts string argument values
     // as provenance references and validates them against the session registry.
     if (provenance) {
-      ;(callParams as any)._meta = {
+      callParams._meta = {
         provenanceReference: {
           id: provenance.id,
           sourceTool: provenance.sourceTool,
@@ -65,23 +65,22 @@ export class Agent44ProxyClient {
     }
 
     // Execute via MCP stdio transport
-    const response: MCPToolResponse = await this.client.callTool({
-      name: toolName,
-      arguments: businessArgs,
-      // _meta is set above
-    });
+    const response: MCPToolResponse = await this.client.callTool(callParams);
+
+    // Extract provenance from response _meta
+    const extractedProvenance = this.extractProvenance(response);
 
     // Parse response
     const result: ToolCallResult = {
-      success: true,
+      success: !response.isError,
       text: response.content?.[0]?.text ?? null,
       error: response.content?.[0]?.text?.includes('denied') || response.isError
         ? 'Provenance policy denied'
         : null,
-      provenance: undefined,
+      provenance: extractedProvenance,
     };
 
-    return this.extractProvenance(result);
+    return result;
   }
 
   extractProvenance(result: MCPToolResponse): ProvenanceReference | undefined {

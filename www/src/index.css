@@ -11,6 +11,16 @@
   --card: 0 0% 8%;
   --border: 0 0% 15%;
   --radius: 0.5rem;
+  --muted-foreground: 0 0% 55%;
+  --primary: 210 100% 50%;
+  --primary-foreground: 0 0% 95%;
+  --secondary: 45 100% 55%;
+  --secondary-foreground: 0 0% 95%;
+  --accent-foreground: 0 0% 100%;
+  --input: 0 0% 10%;
+  --ring: 220 100% 50%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 95%;
 }
 
 /* Reduced motion for accessibility */

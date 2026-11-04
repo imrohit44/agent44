@@ -28,7 +28,8 @@ const Nav = () => (
           ))}
         </div>
     </div>
-  </nav>
+  </div>
+</nav>
 );
 
 export default Nav;

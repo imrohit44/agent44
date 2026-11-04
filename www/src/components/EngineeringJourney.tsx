@@ -7,7 +7,7 @@ const EngineeringJourney = () => {
         <h2 className="text-3xl lg:text-4xl font-bold mb-8">Engineering Journey</h2>
         <div className="space-y-4 text-sm">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center text-sm font-bold text-bg">1</div>
+            <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center text-sm font-bold text-accent">1</div>
             <span>Observation and Evidence Foundation</span>
           </div>
           <div className="flex items-center gap-2">

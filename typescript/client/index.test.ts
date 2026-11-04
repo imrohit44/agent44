@@ -6,11 +6,11 @@ import { createAgent44ProxyClient, Agent44ProxyClient, ProvenanceReference, Tool
 // Mock stdio streams for testing
 const mockStdin = { 
   pipe: () => {} 
-} as unknown as NodeJS.ReadableStream;
+} as unknown as { pipe: () => void };
 
 const mockStdout = { 
   pipe: () => {} 
-} as unknown as NodeJS.WritableStream;
+} as unknown as { pipe: () => void };
 
 // Test 1: Agent44ProxyClient class can be instantiated
 console.log('Test 1: Agent44ProxyClient class export check');

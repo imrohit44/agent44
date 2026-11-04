@@ -2,7 +2,7 @@ import React from "react";
 
 const Hero = () => {
   return (
-    <section className="min-h-screen bg-[length:auto_ auto_]/50% transparent bg-accent/5 rotate-6 rounded-full opacity-30 blur-lg fixed inset-0 overflow-hidden pt-20">
+    <section className="min-h-screen bg-gradient-to-b from-background via-accent/10 to-background fixed inset-0 overflow-hidden pt-20">
       <div className="relative z-10 max-w-7xl mx-auto px-6 py-20 grid lg:grid-cols-2 gap-12 items-center">
         <div>
           <p className="text-accent/70 text-sm uppercase tracking-wider mb-6">A Decision Layer for AI Agent Tool Calls</p>
@@ -25,7 +25,7 @@ const Hero = () => {
       </div>
       <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[400px] lg:block">
         <svg className="w-full h-auto" viewBox="0 0 400 200" aria-hidden="true">
-          <path d="M0 0 L400 0 L400 20 L200 20 L200 180 L0 180 Z" fill="var(--accent)/20" />
+          <path d="M0 0 L400 0 L400 20 L200 20 L200 180 L0 180 Z" fill="var(--accent)" />
           <text x="200" y="190" text-anchor="middle" font-size="16" fill="var(--muted)">AI Agent → Policy → Tool</text>
         </svg>
       </div>

@@ -1,5 +1,6 @@
 {
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.32.2"
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "tailwindcss-animate": "^1.0.7"
   }
 }
