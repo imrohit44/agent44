@@ -5,6 +5,10 @@
   "main": "dist/index.js",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "LICENSE"
+  ],
   "description": "TypeScript client for Agent44 MCP proxy with provenance propagation",
   "keywords": [
     "mcp",
@@ -14,17 +18,17 @@
     "typescript"
   ],
   "author": "Agent44 Team",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
-      "require": "./dist/index.cjs.js",
-      "types": "./dist/index.d.ts"
+      "default": "./dist/index.js"
     }
   },
   "scripts": {
-    "build": "tsc",
-    "typecheck": "tsc --noEmit",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.check.json",
     "demo": "tsx demo/provenance-demo.ts",
     "test": "tsx client/index.test.ts"
   },

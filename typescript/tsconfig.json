@@ -8,14 +8,13 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "outDir": "./dist",
-    "rootDir": "./",
+    "rootDir": "./client",
     "resolveJsonModule": true,
     "declaration": true,
     "sourceMap": true
   },
   "include": [
-    "./client/index.ts",
-    "./demo/provenance-demo.ts"
+    "./client/index.ts"
   ],
   "exclude": ["node_modules", "dist"]
 }

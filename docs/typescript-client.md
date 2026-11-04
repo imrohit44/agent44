@@ -7,11 +7,15 @@ experimental component, not a verified published SDK.
 ## Public API
 
 - `ProvenanceReference`: `{ id: string; sourceTool: string }`
-- `ToolCallResult`: `success`, optional text/error values, and optional
+- `ToolCallResult`: `success`, nullable `text` and `error`, and optional
   provenance reference
 - `Agent44ProxyClient`: constructor, `callTool()`, `extractProvenance()`, and
   `cleanup()`
 - `createAgent44ProxyClient()`: factory returning an `Agent44ProxyClient`
+
+The checked-in source does not define `callToolWithoutReference()` or
+`callToolWithReference()`; `callTool()` accepts an optional provenance
+reference instead.
 
 The constructor signature is currently:
 
@@ -38,18 +42,24 @@ package is published:
 cd typescript
 npm ci
 npm test
+npm run typecheck
+npm run build
+npm pack --dry-run
 ```
 
-Current declared scripts also include `npm run typecheck`, `npm run build`,
-and `npm run demo`. At the time these docs were inspected, `npm test` passed
-its lightweight checks, but `npm run typecheck` failed because
-`demo/provenance-demo.ts` has a syntax error at line 20. The checked-in test
-does not launch a live MCP proxy or exercise actual provenance propagation.
+The package is ESM-only. `npm run build` emits `dist/index.js` and
+`dist/index.d.ts`; the package manifest's `main`, `module`, `types`, and
+`exports` fields point to those generated files. The build configuration
+compiles the package entry point, while `npm run typecheck` checks the entry
+point, test, and demo source. The demo has been corrected to match the
+available factory/result API, but it does not establish a working end-to-end
+proxy integration. Tests cover API shape and provenance-reference parsing;
+they do not launch a live MCP proxy.
 
 No evidence in the repository establishes npm publication. The package
 manifest's version and `exports` fields describe local package metadata, not
-publication. The root repository is Apache-2.0, while this package manifest
-currently declares MIT; resolve the license discrepancy before publication.
+publication. The package metadata and included `LICENSE` now identify this
+package as Apache-2.0, matching the repository license.
 
 ## Tool-call API shape
 
@@ -96,14 +106,17 @@ used to claim interoperable provenance enforcement. See
 ## Verification status
 
 - `npm test` currently prints successful results for basic API/type-shape
-  checks; it is not an integration test.
-- `npm run typecheck` currently fails due to malformed syntax in the demo
-  source included by `tsconfig.json`.
-- The package manifest points to `dist/index.js`, `dist/index.cjs.js`, and
-  `dist/index.d.ts`. With `rootDir: "./"` and `outDir: "./dist"`, the client
-  entry source is emitted under `dist/client/`; the manifest targets are
-  absent in the current checkout. Because typechecking fails first, a
-  successful package build and its emitted files are not verified.
-- No successful package build or npm publication was verified.
-- The package manifest's MIT declaration differs from the root Apache-2.0
-  license and requires maintainer resolution.
+  and provenance parsing; it is not an integration test.
+- `npm run typecheck` passes for the entry point, tests, and demo without
+  emitting files.
+- `npm run build` passes and generates `dist/index.js`, `dist/index.d.ts`,
+  and a source map; all declared ESM package entry points exist.
+- `npm pack --dry-run` includes those distribution files, `package.json`, and
+  the Apache-2.0 `LICENSE`, not TypeScript sources, demos, tests, or the
+  lockfile.
+- A temporary consumer project successfully imported the package and
+  instantiated the exported class/factory. This did not exercise a live
+  `callTool()` exchange.
+- No npm publication is established.
+- The package license is Apache-2.0, as confirmed by the maintainer; the
+  package metadata, lockfile, and included license notice agree.

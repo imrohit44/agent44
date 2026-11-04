@@ -50,12 +50,11 @@ npm test
 npm run typecheck
 ```
 
-The API-shape test passes in the current checkout; the typecheck currently
-fails because `demo/provenance-demo.ts` has a syntax error. The package is not
-verified as an end-to-end client; its declared `dist/` export paths also do
-not match the configured `dist/client/` output path. No npm publication is
-established. See
-[TypeScript Client](typescript-client.md).
+The API/provenance tests, typecheck, and package build pass in the current
+checkout. The ESM exports resolve to generated files, and `npm pack --dry-run`
+includes only the distribution, package metadata, and Apache-2.0 license
+notice. The package is not verified as an end-to-end client, and no npm
+publication is established. See [TypeScript Client](typescript-client.md).
 
 ## Website development
 

@@ -1,7 +1,7 @@
 // TypeScript demo: Tool A -> Tool B provenance propagation
 // Milestone 3C - Agent44 MCP client integration
 
-import { createAgent44ProxyClient } from '../client';
+import { createAgent44ProxyClient } from '../client/index.js';
 
 // Demonstrate provenance propagation through Agent44:
 // 1. Call Tool A through Agent44
@@ -10,14 +10,11 @@ import { createAgent44ProxyClient } from '../client';
 // 4. Verify business arguments remain unchanged
 
 async function main() {
-  // Initialize MCP stdio transport connecting to Agent44 proxy
-  // The proxy runs: agent44 proxy --policy <policy.yaml> -- <downstream tools>
-  const transport = new StdioTransport({
-    command: 'agent44-proxy',
-    args: ['--policy', 'policy.yaml', '--', 'tool-a', 'tool-b']
-  }
-
-  const client = createAgent44ProxyClient(transport);
+  const client = createAgent44ProxyClient(
+    'agent44-proxy',
+    process.stdin,
+    process.stdout
+  );
 
   // Step 1: Call Tool A
   console.log('Step 1: Calling Tool A...');
@@ -31,7 +28,7 @@ async function main() {
   console.log('Tool A provenance:', resultA.provenance?.id || 'none');
 
   // Step 2: Extract provenance reference from Tool A's result
-  const provenanceRef = client.extractProvenance(resultA);
+  const provenanceRef = resultA.provenance;
   console.log('\nStep 2: Extracted provenance reference:', provenanceRef);
 
   if (!provenanceRef) {

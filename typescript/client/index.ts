@@ -2,13 +2,19 @@
 // Milestone 3C.1
 // Uses @modelcontextprotocol/sdk v1 - MCP stdio transport
 
-import {
-  StdioClientTransport,
-  StdioServerTransport,
-  MCPClient,
-  MCPToolResponse,
-  ProvenanceReference as SDKProvenanceReference,
-} from '@modelcontextprotocol/sdk';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import type {
+  CallToolRequestParams,
+  CallToolResult as MCPCallToolResult,
+} from '@modelcontextprotocol/sdk/types.js';
+import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
+
+type MCPToolResponse = Awaited<ReturnType<Client['callTool']>>;
+
+function isMCPCallToolResult(result: MCPToolResponse): result is MCPCallToolResult {
+  return 'content' in result && Array.isArray(result.content);
+}
 
 export interface ProvenanceReference {
   id: string;
@@ -23,17 +29,17 @@ export interface ToolCallResult {
 }
 
 export class Agent44ProxyClient {
-  private readonly client: MCPClient;
+  private readonly client: Client;
   private readonly transport: StdioClientTransport;
 
   constructor(stdioCommand: string, stdin: NodeJS.ReadableStream, stdout: NodeJS.WritableStream) {
     this.transport = new StdioClientTransport({
       command: stdioCommand,
       args: ['--policy', 'policy.yaml', '--'],
-      stdio: ['pipe', 'pipe', 'pipe'],
     });
-    this.client = new MCPClient({
-      transport: this.transport,
+    this.client = new Client({
+      name: 'agent44-ts-client',
+      version: '1.0.0',
     });
   }
 
@@ -46,7 +52,7 @@ export class Agent44ProxyClient {
     const businessArgs: Record<string, unknown> = { ...args };
 
     // Build tool call parameters with optional _meta for provenance
-    const callParams: any = {
+    const callParams: CallToolRequestParams = {
       name: toolName,
       arguments: businessArgs,
     };
@@ -65,7 +71,13 @@ export class Agent44ProxyClient {
     }
 
     // Execute via MCP stdio transport
-    const response: MCPToolResponse = await this.client.callTool(callParams);
+    const response = await this.client.callTool(
+      callParams,
+      CallToolResultSchema
+    );
+    if (!isMCPCallToolResult(response)) {
+      throw new Error('Task-based MCP tool results are not supported by this client');
+    }
 
     // Extract provenance from response _meta
     const extractedProvenance = this.extractProvenance(response);
@@ -73,8 +85,9 @@ export class Agent44ProxyClient {
     // Parse response
     const result: ToolCallResult = {
       success: !response.isError,
-      text: response.content?.[0]?.text ?? null,
-      error: response.content?.[0]?.text?.includes('denied') || response.isError
+      text: response.content?.[0]?.type === 'text' ? response.content[0].text : null,
+      error: response.content?.[0]?.type === 'text'
+        && (response.content[0].text.includes('denied') || response.isError)
         ? 'Provenance policy denied'
         : null,
       provenance: extractedProvenance,
@@ -83,14 +96,18 @@ export class Agent44ProxyClient {
     return result;
   }
 
-  extractProvenance(result: MCPToolResponse): ProvenanceReference | undefined {
+  extractProvenance(result: MCPCallToolResult): ProvenanceReference | undefined {
     // Extract provenance reference from response _meta
-    const meta = result._meta as Record<string, unknown> | undefined;
-    if (meta && 'provenanceReference' in meta) {
-      const prefin = meta.provenanceReference as Record<string, unknown>;
-      if (prefin.id && typeof prefin.id === 'string') {
-        return { id: prefin.id, sourceTool: prefin.sourceTool as string | undefined };
-      }
+    const reference = result._meta?.provenanceReference;
+    if (
+      typeof reference === 'object'
+      && reference !== null
+      && 'id' in reference
+      && typeof reference.id === 'string'
+      && 'sourceTool' in reference
+      && typeof reference.sourceTool === 'string'
+    ) {
+      return { id: reference.id, sourceTool: reference.sourceTool };
     }
     return undefined;
   }

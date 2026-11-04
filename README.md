@@ -108,9 +108,9 @@ status.
 - **Evaluation runner and synthetic corpus:** the runner replays scenarios and
   reports decision outcomes, per-category results, and adapter outcomes. Its
   measurements are scoped to individual synthetic tool-call scenarios.
-- **TypeScript client component:** source and a lightweight API-shape test are
-  present, but the client is not verified as an end-to-end integration. Its
-  typecheck currently fails; see [TypeScript Client](docs/typescript-client.md).
+- **TypeScript client component:** its ESM package builds and exports the
+  generated entry point; tests cover API shape and provenance parsing, not a
+  live integration. See [TypeScript Client](docs/typescript-client.md).
 
 ## Quickstart
 
@@ -243,21 +243,19 @@ for definitions and limits.
 - **Python:** the policy engine, proxy, evaluation runner, and provenance data
   model are implemented in the repository. Python test coverage exists; use the
   development guide for commands and current verification notes.
-- **TypeScript client:** source exists, but its test only checks basic API
-  shapes. The current typecheck fails on syntax in the demo; the MCP
-  `_meta.provenanceReference` path is not integrated into the Python proxy.
-  Its package manifest targets `dist/index.js`, while the TypeScript config
-  places `client/index.ts` output under `dist/client/`; the declared targets
-  are absent and no package build is verified.
+- **TypeScript client:** its source now passes the typecheck and builds an
+  ESM package with generated `dist/index.js` and `dist/index.d.ts` exports.
+  Tests cover API shape and provenance-reference parsing, not a live proxy
+  integration. The MCP `_meta.provenanceReference` path is not integrated
+  into the Python proxy; see [TypeScript Client](docs/typescript-client.md).
 - **Website:** a private Vite/React source project exists under `www/`. Its
   current production build does not pass because the package's build script
   invokes `tsc` without a project configuration in that directory. Deployment
   is not verified.
 - **Publication:** no evidence in this repository establishes that the
   TypeScript package has been published to npm. Do not treat package metadata
-  as publication status. The root repository license is Apache-2.0, while
-  `typescript/package.json` currently says MIT; that discrepancy should be
-  resolved before publishing.
+  as publication status. The TypeScript package license is Apache-2.0, matching
+  the repository license.
 - **Console command:** `pyproject.toml` declares an `agent44` command, but its
   CLI implementation references an undefined `subparsers` name. The quickstart
   therefore uses the module-based proxy command instead; the console command
@@ -284,13 +282,13 @@ The following items are planned work, not implemented release commitments:
 - Define and test a shared MCP provenance metadata contract, including
   reference registration, validation, and response propagation.
 - Complete TypeScript client startup and transport wiring, then add a real
-  proxy integration test and verify package build/publication metadata.
+  proxy integration test.
 - Reconcile evaluation report denominators and attack-block fields with the
   frozen JSON results before making further metric claims.
 - Pursue separately authorized held-out evaluation and broader
   end-to-end/system-level evaluation.
-- Resolve package licensing and publishing decisions before a public package
-  release.
+- Confirm publication readiness and publishing process before a public
+  package release.
 
 ## Contributing
 
@@ -302,8 +300,8 @@ by the required review.
 ## License
 
 The root repository is licensed under the Apache License, Version 2.0; see
-[LICENSE](LICENSE). The separate TypeScript package manifest currently declares
-MIT and needs reconciliation before package publication.
+[LICENSE](LICENSE). The TypeScript package also declares Apache-2.0 and
+includes its license notice in the package.
 
 ## Acknowledgments
 
