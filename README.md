@@ -256,10 +256,10 @@ for definitions and limits.
   TypeScript package has been published to npm. Do not treat package metadata
   as publication status. The TypeScript package license is Apache-2.0, matching
   the repository license.
-- **Console command:** `pyproject.toml` declares an `agent44` command, but its
-  CLI implementation references an undefined `subparsers` name. The quickstart
-  therefore uses the module-based proxy command instead; the console command
-  is unverified.
+- **Console command:** `agent44` provides `init`, `validate`, `run`, and
+  `inspect` commands. `agent44 run` delegates proxy options and the downstream
+  server command to the existing proxy entry point. The module-based proxy
+  command remains available.
 
 ## Limitations
 

@@ -940,7 +940,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         params, observer, policy, adapter, delegation_source = parse_downstream_args(argv)
     except SystemExit as exc:  # argparse already printed the message to stderr
-        return int(exc.code or 2)
+        return int(exc.code or 0)
     except PolicyError as exc:
         # Enforcement was requested but the policy is unusable: refuse to
         # start rather than run without a policy.

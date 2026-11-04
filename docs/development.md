@@ -32,12 +32,12 @@ For focused work, select the relevant tests, for example:
 uv run pytest -q tests/test_policy.py tests/test_proxy.py tests/test_provenance.py
 ```
 
-Python package metadata and an `agent44` console entry point are declared in
-`pyproject.toml`. The console entry point is not verified: `cli.py` assigns
-the subparser object to `sp` but later references an undefined `subparsers`
-name. The proxy can be started as a module with
-`uv run python -m agent44.proxy ...`; this module-based invocation is also
-used by the repository's integration tests.
+Python package metadata and the `agent44` console entry point are declared in
+`pyproject.toml`. Its commands are `init`, `validate`, `run`, and `inspect`.
+`agent44 run` forwards proxy options and the downstream server command to the
+proxy implementation. The proxy can also be started directly as a module with
+`uv run python -m agent44.proxy ...`; this module-based invocation remains
+available to the repository's integration tests.
 
 ## TypeScript client
 

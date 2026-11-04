@@ -4,52 +4,36 @@ from __future__ import annotations
 
 import argparse
 import json
-import logging
 import sys
 from pathlib import Path
 
 from agent44 import __version__
 
-logger = logging.getLogger("agent44.cli")
-
 
 def main(argv: list[str] | None = None) -> int:
-    if argv is None:
-        argv = sys.argv[1:]
-    if not argv:
-        return cmd_help()
+    argv = sys.argv[1:] if argv is None else argv
     parser = argparse.ArgumentParser(
-        prog="agent44", add_help=False,
+        prog="agent44",
         description="MCP proxy with policy enforcement.",
     )
-    sp = parser.add_subparsers(dest="command")
     parser.add_argument("--version", action="version", version=f"agent44 {__version__}")
-    p_init = subparsers.add_parser("init", help="Create config")
+    subparsers = parser.add_subparsers(dest="command")
+    p_init = subparsers.add_parser("init", help="Create config", add_help=False)
     p_init.set_defaults(func=cmd_init)
-    p_val = subparsers.add_parser("validate", help="Validate")
+    p_val = subparsers.add_parser("validate", help="Validate", add_help=False)
     p_val.set_defaults(func=cmd_validate)
-    p_run = subparsers.add_parser("run", help="Run proxy")
+    p_run = subparsers.add_parser("run", help="Run proxy", add_help=False)
     p_run.set_defaults(func=cmd_run)
-    p_ins = subparsers.add_parser("inspect", help="Inspect log")
+    p_ins = subparsers.add_parser("inspect", help="Inspect log", add_help=False)
     p_ins.set_defaults(func=cmd_inspect)
-    if "--help" in argv or "-h" in argv or "help" in argv:
-        parser.print_help(); return 0
-    if "--version" in argv:
-        print(f"agent44 {__version__}"); return 0
-    args = parser.parse_args(argv)
-    if not hasattr(args, "func"):
-        parser.print_help(); return 2
-    return args.func(argv)
-
-
-def cmd_help() -> int:
-    p = argparse.ArgumentParser(prog="agent44",
-                                description="MCP proxy with policy.")
-    p.print_help(); return 0
-
-
-def cmd_version() -> int:
-    print(f"agent44 {__version__}"); return 0
+    if argv == ["help"]:
+        parser.print_help()
+        return 0
+    args, command_args = parser.parse_known_args(argv)
+    if args.command is None:
+        parser.print_help()
+        return 0 if not argv else 2
+    return args.func(command_args)
 
 
 def cmd_init(argv: list[str] | None = None) -> int:
@@ -117,35 +101,5 @@ def cmd_inspect(argv: list[str] | None = None) -> int:
 
 
 def cmd_run(argv: list[str] | None = None) -> int:
-    import argparse
     from agent44.proxy import main as proxy_main
-    parser = argparse.ArgumentParser(prog="agent44 run")
-    parser.add_argument("--config", default=None)
-    parser.add_argument("--policy", default=None)
-    parser.add_argument("--local-model", default=None)
-    parser.add_argument("--local-model-host", default="127.0.0.1")
-    parser.add_argument("--local-model-port", type=int, default=11434)
-    parser.add_argument("--local-model-timeout", type=int, default=30)
-    parser.add_argument("--adapter-replay", default=None)
-    parser.add_argument("downstream_cmd", nargs="?")
-    parser.add_argument("--stderr-level", default="INFO")
-    args = parser.parse_args(argv)
-    level = getattr(logging, args.stderr_level.upper())
-    logging.basicConfig(level=level, stream=sys.stderr,
-                        format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-    pa = []
-    if args.config: pa.extend(["--config", args.config])
-    if args.policy: pa.extend(["--policy", args.policy])
-    if args.local_model: pa.extend(["--local-model", args.local_model])
-    pa.extend(["--local-model-host", args.local_model_host,
-               "--local-model-port", str(args.local_model_port),
-               "--local-model-timeout", str(args.local_model_timeout)])
-    if args.adapter_replay: pa.extend(["--adapter-replay", args.adapter_replay])
-    if args.downstream_cmd: pa.extend(["--", args.downstream_cmd])
-    try:
-        ec = proxy_main(pa)
-        return ec
-    except SystemExit as exc:
-        return int(exc.code or 1)
-    except Exception as e:
-        print(f"error: {e}", file=sys.stderr); return 1
+    return proxy_main(argv)
