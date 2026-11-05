@@ -39,20 +39,39 @@ def main(argv: list[str] | None = None) -> int:
 def cmd_init(argv: list[str] | None = None) -> int:
     import argparse
     from pathlib import Path
+
     parser = argparse.ArgumentParser(prog="agent44 init")
     parser.add_argument("--path", default="agent44.yaml")
     parser.add_argument("--force", action="store_true")
     args = parser.parse_args(argv)
     cp = Path(args.path)
     if cp.exists() and not args.force:
-        print("Use --force to overwrite", file=sys.stderr); return 1
-    cy = "version: \"1\"\nname: agent44-starter\ndefault_deny: true\nallow_tools:\n  - add\n  - echo\nrules:\n  - id: d\n    tool: echo\n    action: DENY\n    reason: \"eval not on echo\"\n    when:\n      field: eval\n      field_exists: true"
+        print("Use --force to overwrite", file=sys.stderr)
+        return 1
+    cy = (
+        'version: "1"\n'
+        "name: agent44-starter\n"
+        "default_deny: true\n"
+        "allow_tools:\n"
+        "  - add\n"
+        "  - echo\n"
+        "rules:\n"
+        "  - id: d\n"
+        "    tool: echo\n"
+        "    action: DENY\n"
+        '    reason: "eval not on echo"\n'
+        "    when:\n"
+        "      field: eval\n"
+        "      field_exists: true"
+    )
     cp.write_text(cy, encoding="utf-8")
-    print(f"Written to {cp}"); return 0
+    print(f"Written to {cp}")
+    return 0
 
 
 def cmd_validate(argv: list[str] | None = None) -> int:
     import yaml
+
     parser = argparse.ArgumentParser(prog="agent44 validate")
     parser.add_argument("config", nargs="?", default=None)
     parser.add_argument("--policy", default=None)
@@ -60,41 +79,62 @@ def cmd_validate(argv: list[str] | None = None) -> int:
     cp = Path(args.config) if args.config else None
     if cp is None:
         for c in ["agent44.yaml", "agent44.yml"]:
-            if Path(c).exists(): cp = Path(c); break
+            if Path(c).exists():
+                cp = Path(c)
+                break
     if cp is None or not cp.exists():
-        print("No config", file=sys.stderr); return 1
+        print("No config", file=sys.stderr)
+        return 1
     try:
-        config = yaml.safe_load(cp.read_text()) or {}
+        yaml.safe_load(cp.read_text())
     except Exception as e:
-        print(f"YAML error: {e}", file=sys.stderr); return 1
+        print(f"YAML error: {e}", file=sys.stderr)
+        return 1
     if args.policy:
-        print("Policy ok"); return 0
-    print("Config ok", file=sys.stderr); return 0
+        print("Policy ok")
+        return 0
+    print("Config ok", file=sys.stderr)
+    return 0
 
 
 def cmd_inspect(argv: list[str] | None = None) -> int:
     import argparse
+
     parser = argparse.ArgumentParser(prog="agent44 inspect")
     parser.add_argument("log", help="JSONL log")
-    parser.add_argument("--fields", nargs="+",
-                        default=["tool_name", "policy_action", "policy_reason",
-                                 "correlation_id", "outcome", "forwarded"])
+    parser.add_argument(
+        "--fields",
+        nargs="+",
+        default=[
+            "tool_name",
+            "policy_action",
+            "policy_reason",
+            "correlation_id",
+            "outcome",
+            "forwarded",
+        ],
+    )
     args = parser.parse_args(argv)
     lp = Path(args.log)
     if not lp.exists():
-        print("Log not found", file=sys.stderr); return 1
+        print("Log not found", file=sys.stderr)
+        return 1
     events = []
     with lp.open("r") as f:
         for line in f:
             line = line.strip()
             if line:
-                try: events.append(json.loads(line))
-                except json.JSONDecodeError: pass
+                try:
+                    events.append(json.loads(line))
+                except json.JSONDecodeError:
+                    pass
     for event in events:
         for field in args.fields:
             v = event.get(field, "<N/A>")
-            if v is None and field in event: v = "<None>"
-            elif field not in event: v = "<N/A>"
+            if v is None and field in event:
+                v = "<None>"
+            elif field not in event:
+                v = "<N/A>"
             print(f"  {field}: {v}")
         print()
     return 0
@@ -102,4 +142,5 @@ def cmd_inspect(argv: list[str] | None = None) -> int:
 
 def cmd_run(argv: list[str] | None = None) -> int:
     from agent44.proxy import main as proxy_main
+
     return proxy_main(argv)

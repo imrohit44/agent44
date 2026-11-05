@@ -88,11 +88,15 @@ uv run python scripts/release_check.py
 
 It regenerates `src/agent44/benchmark.py` from the benchmark fragments and
 fails if the generated source changes, runs the Python tests, compares Ruff
-output with the checked-in baseline, and performs import checks. The historical
-Phase 9 hash manifest is not present in the current repository. In its
-absence, the gate checks that `evaluation/` has no working-tree changes; this
-is not a historical hash verification. The gate does not build or publish
-distributions and does not establish release readiness on its own.
+findings with the structured, reviewed `.ruff_baseline.json`, and performs
+import checks. The Ruff comparison rejects new findings by file, rule, message,
+and source line while tolerating line-number shifts; baseline updates require
+review and should not be made by blindly replacing the file with current
+output. The historical Phase 9 hash manifest is not present in the current
+repository. In its absence, the gate checks that `evaluation/` has no
+working-tree changes; this is not a historical hash verification. The gate
+does not build or publish distributions and does not establish release
+readiness on its own.
 There is no `.github/workflows/` release workflow in this checkout, so this
 local gate is not run automatically by GitHub.
 

@@ -14,6 +14,7 @@ import sys
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any
 
 import psutil
 import pytest
@@ -197,7 +198,8 @@ async def test_deny_prevents_downstream_forwarding(tmp_path: Path) -> None:
             # above is the authoritative evidence for zero downstream invocations.
             forwarded_denied = [e for e in denied_events if e.get("forwarded") is True]
             assert len(forwarded_denied) == 0, (
-                f"DENY: expected zero forwarded events, got {len(forwarded_denied)}: {forwarded_denied}"
+                "DENY: expected zero forwarded events, got "
+                f"{len(forwarded_denied)}: {forwarded_denied}"
             )
 
     # Test block 2: ALLOW control case - the 'add' tool should succeed

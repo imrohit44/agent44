@@ -3,17 +3,18 @@
 Run with:  uv run python scripts/release_check.py
 
 Checks: assembly produces no unexpected changes, full pytest passes, Ruff
-output matches the checked-in baseline, imports work, and evaluation files
-are unchanged or match the available frozen-file manifest. No network, no
-vendor calls, fully offline.
+findings contain no additions beyond the reviewed baseline, imports work,
+and evaluation files are unchanged or match the available frozen-file
+manifest. No network, no vendor calls, fully offline.
 """
 
 from __future__ import annotations
 
-import difflib
 import hashlib
+import json
 import subprocess
 import sys
+from collections import Counter
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -70,32 +71,79 @@ def step2_pytest():
 
 def step3_ruff_diff():
     print("=== Step 3: ruff diff ===")
-    result = run([sys.executable, "-m", "ruff", "check", "src/", "tests/"], check=False)
-    current_output = result.stdout + result.stderr
+    result = run(
+        [
+            sys.executable,
+            "-m",
+            "ruff",
+            "check",
+            "src/",
+            "tests/",
+            "--output-format=json",
+        ],
+        check=False,
+    )
+    if result.returncode not in (0, 1):
+        print(f"FAIL: Ruff exited with unexpected status {result.returncode}")
+        print(result.stderr)
+        return False
     if not BASELINE_RUFF.exists():
         print(f"FAIL: Ruff baseline not found: {BASELINE_RUFF}")
         return False
-    baseline = BASELINE_RUFF.read_text()
-    if not baseline.strip():
-        print(f"FAIL: Ruff baseline is empty: {BASELINE_RUFF}")
+    try:
+        baseline = json.loads(BASELINE_RUFF.read_text(encoding="utf-8"))
+        current_diagnostics = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        print(f"FAIL: unable to parse Ruff baseline or output: {exc}")
         return False
-    if current_output == baseline:
-        print("PASS: ruff output matches pre-existing baseline (no new issues)")
-        return True
-    print("FAIL: ruff output differs from pre-existing baseline")
-    diff = list(
-        difflib.unified_diff(
-            baseline.splitlines(),
-            current_output.splitlines(),
-            fromfile=str(BASELINE_RUFF),
-            tofile="current Ruff output",
-            lineterm="",
+    if baseline.get("schema_version") != 1 or not isinstance(
+        baseline.get("diagnostics"), list
+    ) or not isinstance(current_diagnostics, list):
+        print(f"FAIL: unsupported or empty Ruff baseline: {BASELINE_RUFF}")
+        return False
+
+    def signature(diagnostic):
+        return (
+            diagnostic["file"],
+            diagnostic["code"],
+            diagnostic["message"],
+            diagnostic["source"],
         )
+
+    def normalize(diagnostic):
+        relative_path = Path(diagnostic["filename"]).resolve().relative_to(ROOT)
+        source = (ROOT / relative_path).read_text(encoding="utf-8").splitlines()
+        return {
+            "file": relative_path.as_posix(),
+            "line": diagnostic["location"]["row"],
+            "code": diagnostic["code"],
+            "message": diagnostic["message"],
+            "source": source[diagnostic["location"]["row"] - 1].strip(),
+        }
+
+    baseline_counts = Counter(signature(item) for item in baseline["diagnostics"])
+    normalized_diagnostics = [normalize(item) for item in current_diagnostics]
+    current_counts = Counter(signature(item) for item in normalized_diagnostics)
+    new_diagnostics = current_counts - baseline_counts
+    if new_diagnostics:
+        print("FAIL: Ruff found diagnostics not present in the reviewed baseline")
+        for item in normalized_diagnostics:
+            key = signature(item)
+            if new_diagnostics[key]:
+                print(
+                    f"  {item['file']}:{item['line']} "
+                    f"{item['code']} {item['message']}"
+                )
+                new_diagnostics[key] -= 1
+        return False
+
+    resolved_count = sum((baseline_counts - current_counts).values())
+    print(
+        "PASS: no new Ruff diagnostics "
+        f"({sum(current_counts.values())} current; "
+        f"{resolved_count} previously baselined diagnostics resolved)"
     )
-    print("\n".join(diff[:120]))
-    if len(diff) > 120:
-        print(f"... diff truncated ({len(diff)} lines total)")
-    return False
+    return True
 
 
 def step4_import_sanity():

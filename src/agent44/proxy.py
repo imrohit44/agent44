@@ -112,7 +112,7 @@ class ProxyState:
     adapter: DecisionAdapter | None = None
     delegation_source: DelegationSource | None = None
     transfer_store: ProvenanceTransferStore | None = None
-    provenance_session: "ProvenanceSession | None" = None
+    provenance_session: ProvenanceSession | None = None
 
 
 def build_server(

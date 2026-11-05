@@ -22,10 +22,14 @@ Design rules
 
 from __future__ import annotations
 
+import logging
 import time
 import uuid
 from dataclasses import dataclass, field
 from enum import StrEnum
+from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 class TrustClass(StrEnum):
@@ -385,6 +389,15 @@ class ProvenanceContext:
         return ProvenanceContext(registry=self.registry, values=values)
 
 
+@dataclass(frozen=True)
+class ValidationResult:
+    provenance_id: str
+    valid: bool
+    category: str
+    audit_event_id: str | None
+    message: str
+
+
 class ProvenanceSession:
     """Provenance state owned by one proxy session.
 
@@ -461,7 +474,9 @@ class ProvenanceSession:
             message=f"provenance_id {provenance_id} validated",
         )
 
-    def build_context(self, argument_references: dict[str, tuple[str, ...] | None]) -> ProvenanceContext | None:
+    def build_context(
+        self, argument_references: dict[str, tuple[str, ...] | None]
+    ) -> ProvenanceContext | None:
         """Build a ProvenanceContext from argument references.
 
         For each argument, if a provenance reference is supplied, use it;
@@ -483,4 +498,3 @@ class ProvenanceSession:
         except Exception:
             logger.exception("failed to build provenance context")
             return None
-

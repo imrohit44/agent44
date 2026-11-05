@@ -34,6 +34,20 @@ evaluation check is not a historical hash verification. The gate does not
 build distributions or perform publication steps; it is not, by itself, a
 complete release-readiness check.
 
+The structured `.ruff_baseline.json` records reviewed pre-existing findings.
+The release check compares each finding by file, rule, message, and source
+line, ignoring line numbers so unrelated edits do not invalidate the snapshot.
+New findings fail the gate; resolved findings do not need to be retained.
+When changing the baseline, run:
+
+```powershell
+uv run python -m ruff check src/ tests/ --output-format=json
+```
+
+Review each addition and removal, fix new code issues where practical, and
+record the Ruff version and generation command in the baseline. Do not replace
+the baseline with unreviewed current output.
+
 Build Python distributions locally with `uv build --wheel --sdist`. Build and
 inspect the TypeScript package from `typescript/`; see
 [`docs/typescript-client.md`](docs/typescript-client.md). Do not publish

@@ -20,6 +20,7 @@ from agent44.provenance import (
     ProvenanceError,
     ProvenanceLimitError,
     ProvenanceRegistry,
+    ProvenanceSession,
     TrustClass,
 )
 
@@ -231,3 +232,18 @@ def test_provenance_context_with_argument_returns_copy() -> None:
     # Original unchanged (immutable).
     assert len(ctx.values) == 0
 
+
+def test_provenance_session_validates_known_and_unknown_references() -> None:
+    session = ProvenanceSession()
+    known_id = session.registry.classify_external()
+
+    known_result = session.validate_reference(known_id)
+    assert known_result.valid is True
+    assert known_result.provenance_id == known_id
+    assert known_result.category == "known"
+
+    unknown_result = session.validate_reference("unknown-reference")
+    assert unknown_result.valid is False
+    assert unknown_result.provenance_id == "unknown-reference"
+    assert unknown_result.category == "unknown"
+    assert unknown_result.audit_event_id is not None

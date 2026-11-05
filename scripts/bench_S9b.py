@@ -68,9 +68,17 @@ def main(argv: list[str] | None = None) -> int:
 
     print("REVISION=" + str(summary["rev"]), file=sys.stderr)
     print("BASELINE_EXECUTED=" + str(summary["profiles"]["baseline"]["executed"]), file=sys.stderr)
-    print("BASELINE_AGREEMENT=" + ("%.4f" % summary["profiles"]["baseline"]["agreement"]), file=sys.stderr)
+    print(
+        "BASELINE_AGREEMENT="
+        + f"{summary['profiles']['baseline']['agreement']:.4f}",
+        file=sys.stderr,
+    )
     print("ENFORCEMENT_EXECUTED=" + str(summary["profiles"]["enforcement"]["executed"]), file=sys.stderr)
-    print("ENFORCEMENT_AGREEMENT=" + ("%.4f" % summary["profiles"]["enforcement"]["agreement"]), file=sys.stderr)
+    print(
+        "ENFORCEMENT_AGREEMENT="
+        + f"{summary['profiles']['enforcement']['agreement']:.4f}",
+        file=sys.stderr,
+    )
     print("GROUP_B_ENGINE_MATCHED=" + str(summary["group_b"]["engine_matched"]), file=sys.stderr)
     print("GROUP_B_PROXY_NON_FORWARDING_VERIFIED=" + str(summary["group_b"]["proxy_non_forwarding_verified"]), file=sys.stderr)
     print("COMBINED_TOTAL=" + str(summary["combined_total"]), file=sys.stderr)
