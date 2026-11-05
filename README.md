@@ -245,17 +245,20 @@ for definitions and limits.
   development guide for commands and current verification notes.
 - **TypeScript client:** its source now passes the typecheck and builds an
   ESM package with generated `dist/index.js` and `dist/index.d.ts` exports.
-  Tests cover API shape and provenance-reference parsing, not a live proxy
-  integration. The MCP `_meta.provenanceReference` path is not integrated
-  into the Python proxy; see [TypeScript Client](docs/typescript-client.md).
+  The checked-out source passes a real stdio MCP integration test through the
+  Python proxy, covering tool discovery/calls, policy denial, and provenance
+  metadata round-trip. The published npm `0.1.0` predates these transport
+  changes and has not been republished. Metadata transport does not validate
+  provenance or establish end-to-end enforcement; see
+  [TypeScript Client](docs/typescript-client.md).
 - **Website:** a private Vite/React source project exists under `www/`. Its
   current production build does not pass because the package's build script
   invokes `tsc` without a project configuration in that directory. Deployment
   is not verified.
-- **Publication:** no evidence in this repository establishes that the
-  TypeScript package has been published to npm. Do not treat package metadata
-  as publication status. The TypeScript package license is Apache-2.0, matching
-  the repository license.
+- **Publication:** `@imrohit44/agent44-ts-client@0.1.0` is publicly published.
+  That published version predates the integration implemented in the current
+  checkout. The TypeScript package license is Apache-2.0, matching the
+  repository license.
 - **Console command:** `agent44` provides `init`, `validate`, `run`, and
   `inspect` commands. `agent44 run` delegates proxy options and the downstream
   server command to the existing proxy entry point. The module-based proxy
@@ -281,8 +284,8 @@ The following items are planned work, not implemented release commitments:
 
 - Define and test a shared MCP provenance metadata contract, including
   reference registration, validation, and response propagation.
-- Complete TypeScript client startup and transport wiring, then add a real
-  proxy integration test.
+- Release the verified TypeScript transport integration in a separately
+  authorized package version, then validate that published tarball.
 - Reconcile evaluation report denominators and attack-block fields with the
   frozen JSON results before making further metric claims.
 - Pursue separately authorized held-out evaluation and broader

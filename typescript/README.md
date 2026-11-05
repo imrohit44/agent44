@@ -1,19 +1,22 @@
 # Agent44 TypeScript Client
 
 The Agent44 TypeScript Client is an experimental ESM wrapper around the
-Model Context Protocol (MCP) client SDK. It exposes a tool-call result shape
-and helpers for attaching and extracting a `provenanceReference` in MCP
-`_meta` fields.
+Model Context Protocol (MCP) client SDK. The checked-out source can spawn an
+MCP server over stdio, initialize a session, discover tools, call tools, and
+close the child process. It also supports carrying a `provenanceReference`
+through MCP `_meta`.
 
-This package is not currently a complete MCP proxy client: the implementation
-does not connect its MCP client to the configured stdio transport, does not use
-the supplied input/output streams, and does not provide a downstream server
-command. Consequently, a successful live MCP tool call has not been verified.
-The package tests cover API shape and provenance-reference parsing only; they
-do not establish end-to-end provenance enforcement or safety.
+**Release note:** the publicly published `0.1.0` predates the transport
+integration described below. This repository's integration changes have not
+been published; installing `0.1.0` does not provide the newly verified
+transport behavior. The API remains experimental and is not a stable SDK
+contract.
 
-The package version is `0.1.0` to identify this incomplete, experimental API as
-pre-1.0. It should not be treated as a stable SDK contract.
+The Python proxy forwards a well-formed `provenanceReference` metadata object
+to the downstream MCP server and preserves downstream response metadata. It
+does not validate that reference against its provenance registry or use it as
+policy evidence. The integration test demonstrates metadata transport only,
+not end-to-end provenance enforcement or safety.
 
 ## Requirements
 
@@ -22,13 +25,14 @@ pre-1.0. It should not be treated as a stable SDK contract.
 
 ## Installation
 
-After the package is published, install it with:
+Install the published package:
 
 ```sh
 npm install @imrohit44/agent44-ts-client
 ```
 
-For pre-publication testing, install a locally-created package tarball instead.
+The currently published `0.1.0` does not include the transport integration
+implemented in this repository checkout.
 
 ## Exports and API
 
@@ -39,21 +43,35 @@ The package exports:
 - `ProvenanceReference`
 - `ToolCallResult`
 
-The current factory and class constructor accept a command and Node streams:
+The factory accepts a command, the legacy stream parameters, and optional
+child-process options:
 
 ```ts
 import {
   Agent44ProxyClient,
   createAgent44ProxyClient,
+  type Agent44ProxyClientOptions,
   type ProvenanceReference,
   type ToolCallResult,
 } from '@imrohit44/agent44-ts-client';
 
 const client = createAgent44ProxyClient(
-  'agent44',
+  'python',
   process.stdin,
   process.stdout,
+  {
+    args: [
+      '-m', 'agent44.proxy', '--',
+      'python', '-m', 'agent44.demo_server',
+    ],
+    cwd: process.cwd(),
+  } satisfies Agent44ProxyClientOptions,
 );
+
+await client.connect();
+const tools = await client.listTools();
+const result = await client.callTool('add', { a: 2, b: 3 });
+await client.cleanup();
 
 const sameClient: Agent44ProxyClient = client;
 const reference: ProvenanceReference = {
@@ -67,10 +85,13 @@ const resultShape: ToolCallResult = {
 };
 ```
 
-This example demonstrates imports and API types; it does not start a working
-MCP session. The command arguments are currently hard-coded inside the
-implementation, and the `stdin` and `stdout` parameters are not used to connect
-the transport.
+The executable and `args` must start an MCP server; to traverse Agent44,
+launch the Python proxy with the downstream server command after `--`. The
+SDK opens child-process stdin/stdout itself. The retained `stdin` and `stdout`
+parameters are accepted for compatibility and are not used by the transport.
+`connect()` performs MCP initialization, `listTools()` discovers tools, and
+`callTool()` also connects automatically if needed. Always call `cleanup()` to
+close the child process.
 
 `extractProvenance()` can parse a reference from an MCP response `_meta`:
 
@@ -88,19 +109,19 @@ const extracted = client.extractProvenance({
 
 The `callTool(toolName, args, provenance?)` method constructs an MCP tool-call
 request and, when provided, attaches the reference as
-`_meta.provenanceReference`. The implementation has not connected the MCP
-client to its transport, so live `callTool()` execution is unverified and
-should not be relied on as a functioning downstream integration.
-
-Call `client.cleanup()` to close the internally-created transport when
-applicable.
+`_meta.provenanceReference`.
 
 ## Verification status
 
-The package's automated tests verify API shape and provenance parsing.
-Type-checking, package building, and importing the built ESM exports have been
-verified. No live MCP tool exchange, interoperability with the Python proxy,
-or end-to-end safety behavior is established.
+The repository's `npm run test:integration` test starts the Python Agent44
+proxy and a local deterministic MCP server. It verifies initialization, tool
+discovery, an `add` result, policy denial, metadata round-tripping, unknown-tool
+failure handling, and shutdown. It requires `uv` and the repository's Python
+dependencies; it is not run by the published package's `npm test`.
+
+This verification applies to the checked-out source, not published npm
+version `0.1.0`. No end-to-end provenance validation/lineage, delegation
+enforcement, remote MCP transport, or production safety behavior is established.
 
 ## License
 

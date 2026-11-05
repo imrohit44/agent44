@@ -7,6 +7,7 @@
   "include": [
     "./client/index.ts",
     "./client/index.test.ts",
+    "./client/index.integration.test.ts",
     "./demo/provenance-demo.ts"
   ],
   "exclude": ["node_modules", "dist"]

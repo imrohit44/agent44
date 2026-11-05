@@ -588,8 +588,24 @@ def build_server(
         # correlation id is denied rather than blindly retried.
         transfer_export_evidence: list[dict[str, Any]] = []
         try:
+            request_meta = getattr(server.request_context, "meta", None)
+            extra_meta = getattr(request_meta, "model_extra", None)
+            provenance_reference = (
+                extra_meta.get("provenanceReference")
+                if isinstance(extra_meta, dict)
+                else None
+            )
+            forwarded_meta = (
+                {"provenanceReference": provenance_reference}
+                if isinstance(provenance_reference, dict)
+                else None
+            )
             with anyio.fail_after(DOWNSTREAM_CALL_TIMEOUT_SECONDS):
-                result = await state.session.call_tool(name, forward_args)
+                result = await state.session.call_tool(
+                    name,
+                    forward_args,
+                    meta=forwarded_meta,
+                )
         except TimeoutError as exc:
             if correlation_reserved:
                 _finish_quietly(state, delegation_context, correlation_id, "ambiguous")

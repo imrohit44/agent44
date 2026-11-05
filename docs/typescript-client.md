@@ -1,36 +1,44 @@
 # TypeScript Client
 
-The `typescript/client/index.ts` file contains a small MCP client wrapper with
-methods for calling tools and reading/writing provenance metadata. It is an
-experimental component, not a verified published SDK.
+The checked-out `typescript/client/index.ts` implements an experimental MCP
+stdio client wrapper. The repository's integration test launches the Python
+Agent44 proxy and a local deterministic MCP server. This working-tree
+verification does not apply to the publicly published `0.1.0`, which predates
+the transport integration and has not been republished.
 
 ## Public API
 
 - `ProvenanceReference`: `{ id: string; sourceTool: string }`
 - `ToolCallResult`: `success`, nullable `text` and `error`, and optional
   provenance reference
-- `Agent44ProxyClient`: constructor, `callTool()`, `extractProvenance()`, and
-  `cleanup()`
+- `Agent44ProxyClientOptions`: child process arguments, working directory, and
+  environment
+- `Agent44ProxyClient`: constructor, `connect()`, `listTools()`, `callTool()`,
+  `extractProvenance()`, and `cleanup()`
 - `createAgent44ProxyClient()`: factory returning an `Agent44ProxyClient`
 
 The checked-in source does not define `callToolWithoutReference()` or
 `callToolWithReference()`; `callTool()` accepts an optional provenance
 reference instead.
 
-The constructor signature is currently:
+The constructor and factory retain the original command and stream arguments
+and add optional process options:
 
 ```ts
 new Agent44ProxyClient(
   stdioCommand: string,
   stdin: NodeJS.ReadableStream,
-  stdout: NodeJS.WritableStream
+  stdout: NodeJS.WritableStream,
+  options?: Agent44ProxyClientOptions
 )
 ```
 
-The provided streams are currently unused. The transport arguments are
-hard-coded as `['--policy', 'policy.yaml', '--']`, without a downstream server
-command. Consequently, the public API shape should not be mistaken for a
-working, configurable proxy launcher.
+The MCP SDK spawns `stdioCommand` with `options.args`, `options.cwd`, and
+`options.env`. It owns the child process's protocol stdin/stdout; the retained
+`stdin` and `stdout` parameters are compatibility parameters and are unused.
+`connect()` initializes the MCP session; `listTools()` connects if needed and
+returns the discovered tools; `callTool()` also connects lazily. `cleanup()`
+closes the SDK transport and child process.
 
 ## Installation and setup
 
@@ -47,24 +55,18 @@ npm run build
 npm pack --dry-run
 ```
 
-The package identity is `@imrohit44/agent44-ts-client` at version `0.1.0`.
-For npm package metadata, install instructions, and consumer-facing examples,
-see the [TypeScript package README](../typescript/README.md). Publication and
-registry availability have not been established.
+The package identity is `@imrohit44/agent44-ts-client` at version `0.1.0`;
+that version is publicly published. Its published contents predate the
+transport changes described here. The working-tree source has not been
+published as a new version. For consumer-facing examples and limitations, see
+the [TypeScript package README](../typescript/README.md).
 
 The package is ESM-only. `npm run build` emits `dist/index.js` and
 `dist/index.d.ts`; the package manifest's `main`, `module`, `types`, and
 `exports` fields point to those generated files. The build configuration
 compiles the package entry point, while `npm run typecheck` checks the entry
-point, test, and demo source. The demo has been corrected to match the
-available factory/result API, but it does not establish a working end-to-end
-proxy integration. Tests cover API shape and provenance-reference parsing;
-they do not launch a live MCP proxy.
-
-No evidence in the repository establishes npm publication. The package
-manifest's version and `exports` fields describe local package metadata, not
-publication. The package metadata and included `LICENSE` identify this
-package as Apache-2.0, matching the repository license.
+point, tests, and demo source. The package metadata and included `LICENSE`
+identify this package as Apache-2.0, matching the repository license.
 
 ## Tool-call API shape
 
@@ -79,10 +81,10 @@ const result = await client.callTool(
 );
 ```
 
-This is an API-shape example, not a verified runnable integration. The current
-constructor does not accept a downstream command or configurable policy path,
-so a client created from this source is not yet a complete drop-in proxy
-launcher.
+The call example is executable after connecting the client to a configured
+MCP server process. To invoke the Agent44 proxy, the configured process must
+run `agent44.proxy` with a downstream command after `--`. See the runnable
+local integration test for an example of that argument setup.
 
 ## Provenance propagation
 
@@ -101,28 +103,31 @@ adds this to the MCP request:
 ```
 
 `extractProvenance()` looks for the same `provenanceReference` object in the
-response `_meta`. The Python proxy currently does not consume this request
-metadata or generate matching response metadata. Its legacy Python path
-examines non-empty string argument values as candidate references instead.
-Thus, the TypeScript metadata path is not end-to-end verified and should not be
-used to claim interoperable provenance enforcement. See
-[Provenance](provenance.md).
+response `_meta`. The Python proxy forwards a dictionary-valued reference to
+the downstream MCP server and returns downstream result metadata unchanged.
+The integration test verifies that transport round-trip with a local fixture.
+The proxy does not validate this metadata reference against its provenance
+registry or use it as policy evidence. This does not establish end-to-end
+provenance enforcement. See [Provenance](provenance.md).
 
 ## Verification status
 
-- `npm test` currently prints successful results for basic API/type-shape
-  and provenance parsing; it is not an integration test.
+- `npm test` covers API/type shape and provenance parsing.
+- `npm run test:integration` starts the Python proxy and a local MCP server;
+  it requires `uv` and the repository's Python dependencies.
 - `npm run typecheck` passes for the entry point, tests, and demo without
   emitting files.
-- `npm run build` passes and generates `dist/index.js`, `dist/index.d.ts`,
-  and a source map; all declared ESM package entry points exist. The package
-  allowlist intentionally excludes the source map.
+- `npm run build` generates `dist/index.js`, `dist/index.d.ts`, and a source
+  map; all declared ESM package entry points exist. The package allowlist
+  intentionally excludes the source map.
 - `npm pack --dry-run` includes `dist/index.js`, `dist/index.d.ts`,
   `package.json`, `README.md`, and the Apache-2.0 `LICENSE`, not TypeScript
   sources, demos, tests, the lockfile, or source maps.
-- A temporary consumer project successfully imported the package and
-  instantiated the exported class/factory. This did not exercise a live
-  `callTool()` exchange.
-- No npm publication is established.
+- The integration test verifies real stdio MCP initialization, discovery,
+  successful tool calls, policy denial, metadata round-trip, unknown-tool
+  errors, and shutdown through the checked-out Python proxy.
+- The published npm `0.1.0` predates these transport changes. The updated
+  working-tree source has not been published or tested from an updated npm
+  tarball.
 - The package license is Apache-2.0, as confirmed by the maintainer; the
   package metadata, lockfile, and included license notice agree.

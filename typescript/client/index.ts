@@ -4,6 +4,7 @@
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type {
   CallToolRequestParams,
   CallToolResult as MCPCallToolResult,
@@ -28,19 +29,55 @@ export interface ToolCallResult {
   provenance?: ProvenanceReference;
 }
 
+export interface Agent44ProxyClientOptions {
+  args?: string[];
+  cwd?: string;
+  env?: Record<string, string>;
+}
+
 export class Agent44ProxyClient {
   private readonly client: Client;
   private readonly transport: StdioClientTransport;
+  private connection: Promise<void> | undefined;
+  private closed = false;
 
-  constructor(stdioCommand: string, stdin: NodeJS.ReadableStream, stdout: NodeJS.WritableStream) {
+  constructor(
+    stdioCommand: string,
+    _stdin: NodeJS.ReadableStream,
+    _stdout: NodeJS.WritableStream,
+    options: Agent44ProxyClientOptions = {},
+  ) {
     this.transport = new StdioClientTransport({
       command: stdioCommand,
-      args: ['--policy', 'policy.yaml', '--'],
+      args: options.args,
+      cwd: options.cwd,
+      env: options.env,
     });
     this.client = new Client({
       name: '@imrohit44/agent44-ts-client',
-      version: '1.0.0',
+      version: '0.1.0',
     });
+  }
+
+  async connect(): Promise<void> {
+    if (this.closed) {
+      throw new Error('Agent44ProxyClient has been closed');
+    }
+    if (this.connection) {
+      return this.connection;
+    }
+
+    this.connection = this.client.connect(this.transport).catch((error: unknown) => {
+      this.connection = undefined;
+      throw error;
+    });
+    return this.connection;
+  }
+
+  async listTools(): Promise<Tool[]> {
+    await this.connect();
+    const result = await this.client.listTools();
+    return result.tools;
   }
 
   async callTool(
@@ -48,6 +85,8 @@ export class Agent44ProxyClient {
     args: Record<string, unknown>,
     provenance?: ProvenanceReference
   ): Promise<ToolCallResult> {
+    await this.connect();
+
     // Separate provenance metadata from business arguments
     const businessArgs: Record<string, unknown> = { ...args };
 
@@ -58,9 +97,8 @@ export class Agent44ProxyClient {
     };
 
     // Include provenance reference in _meta if supplied
-    // The MCP SDK uses _meta for out-of-band metadata including provenance references
-    // The Agent44 proxy (proxy.py) extracts string argument values
-    // as provenance references and validates them against the session registry.
+    // The proxy forwards this reference as metadata, but does not treat it as
+    // validated provenance or policy evidence.
     if (provenance) {
       callParams._meta = {
         provenanceReference: {
@@ -83,13 +121,11 @@ export class Agent44ProxyClient {
     const extractedProvenance = this.extractProvenance(response);
 
     // Parse response
+    const text = response.content?.[0]?.type === 'text' ? response.content[0].text : null;
     const result: ToolCallResult = {
       success: !response.isError,
-      text: response.content?.[0]?.type === 'text' ? response.content[0].text : null,
-      error: response.content?.[0]?.type === 'text'
-        && (response.content[0].text.includes('denied') || response.isError)
-        ? 'Provenance policy denied'
-        : null,
+      text,
+      error: response.isError ? text ?? 'Tool call failed' : null,
       provenance: extractedProvenance,
     };
 
@@ -113,14 +149,19 @@ export class Agent44ProxyClient {
   }
 
   async cleanup(): Promise<void> {
-    await this.transport.close();
+    if (this.closed) {
+      return;
+    }
+    this.closed = true;
+    await this.client.close();
   }
 }
 
 export function createAgent44ProxyClient(
   stdioCommand: string,
   stdin: NodeJS.ReadableStream,
-  stdout: NodeJS.WritableStream
+  stdout: NodeJS.WritableStream,
+  options?: Agent44ProxyClientOptions,
 ): Agent44ProxyClient {
-  return new Agent44ProxyClient(stdioCommand, stdin, stdout);
+  return new Agent44ProxyClient(stdioCommand, stdin, stdout, options);
 }

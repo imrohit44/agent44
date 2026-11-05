@@ -44,7 +44,8 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.check.json",
     "demo": "tsx demo/provenance-demo.ts",
-    "test": "tsx client/index.test.ts"
+    "test": "tsx client/index.test.ts",
+    "test:integration": "tsx client/index.integration.test.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0"
