@@ -49,10 +49,15 @@ is supplied:
 ```
 
 It places the object under the MCP tool-call `_meta` field and looks for the
-same shape in a response's `_meta`. **The Python proxy currently does not read
-`_meta.provenanceReference` or attach such a reference to its response.** Its
-tool handler receives the tool name and business arguments; the client
-metadata feature is therefore not verified as an end-to-end contract.
+same shape in a response's `_meta`. The Python proxy forwards a
+dictionary-valued `_meta.provenanceReference` to the downstream MCP server and
+preserves downstream response metadata. The TypeScript-to-proxy-to-fixture
+round-trip is verified by the local integration test.
+
+This is metadata transport only. The proxy does not validate the reference
+against its provenance registry, attach it to a provenance context, or use it
+as policy evidence. The metadata contract is therefore not an end-to-end
+provenance enforcement mechanism.
 
 ## Legacy argument-value mechanism
 

@@ -100,17 +100,20 @@ status.
 - **Policy precedence and hard deny:** hard-deny tool lists and hard DENY
   argument rules cannot be overturned by a lower tier or adapter.
 - **Provenance model:** Python classes represent trust classes, derived
-  lineage, and explicit validation transitions. Full MCP `_meta` propagation
-  is not currently wired end to end; see [Provenance](docs/provenance.md).
+  lineage, and explicit validation transitions. The proxy forwards a
+  dictionary-valued MCP `_meta.provenanceReference` as metadata, but does not
+  validate it or use it as policy evidence; see
+  [Provenance](docs/provenance.md).
 - **Optional decision adapters:** adapters are restricted to `adapter_tools`.
   The repository includes deterministic/replay and model/provider adapter
   components; remote backend availability is not verified.
 - **Evaluation runner and synthetic corpus:** the runner replays scenarios and
   reports decision outcomes, per-category results, and adapter outcomes. Its
   measurements are scoped to individual synthetic tool-call scenarios.
-- **TypeScript client component:** its ESM package builds and exports the
-  generated entry point; tests cover API shape and provenance parsing, not a
-  live integration. See [TypeScript Client](docs/typescript-client.md).
+- **TypeScript client component:** the repository's candidate `0.2.0` adds a
+  real stdio MCP client flow and passes a local integration test through the
+  Python proxy. The publicly published `0.1.0` predates that functionality.
+  See [TypeScript Client](docs/typescript-client.md).
 
 ## Quickstart
 
@@ -246,18 +249,19 @@ for definitions and limits.
 - **TypeScript client:** its source now passes the typecheck and builds an
   ESM package with generated `dist/index.js` and `dist/index.d.ts` exports.
   The checked-out source passes a real stdio MCP integration test through the
-  Python proxy, covering tool discovery/calls, policy denial, and provenance
-  metadata round-trip. The published npm `0.1.0` predates these transport
-  changes and has not been republished. Metadata transport does not validate
-  provenance or establish end-to-end enforcement; see
-  [TypeScript Client](docs/typescript-client.md).
+  Python proxy, covering tool discovery/calls, policy denial with a downstream
+  execution-count assertion, and provenance metadata round-trip. Candidate
+  `0.2.0` is prepared and locally tested from a tarball; it has not been
+  published. The published npm `0.1.0` predates these transport changes.
+  Metadata transport does not validate provenance or establish end-to-end
+  enforcement; see [TypeScript Client](docs/typescript-client.md).
 - **Website:** a private Vite/React source project exists under `www/`. Its
   current production build does not pass because the package's build script
   invokes `tsc` without a project configuration in that directory. Deployment
   is not verified.
 - **Publication:** `@imrohit44/agent44-ts-client@0.1.0` is publicly published.
-  That published version predates the integration implemented in the current
-  checkout. The TypeScript package license is Apache-2.0, matching the
+  Candidate `0.2.0` is not published; any publication requires separate
+  authorization. The TypeScript package license is Apache-2.0, matching the
   repository license.
 - **Console command:** `agent44` provides `init`, `validate`, `run`, and
   `inspect` commands. `agent44 run` delegates proxy options and the downstream
@@ -274,8 +278,8 @@ for definitions and limits.
   failure of a multi-step attack objective.
 - Adapter results depend on the adapter and configuration. Remote backend
   credentials/live access are not verified.
-- The TypeScript provenance metadata contract is not currently connected to
-  the Python proxy's provenance implementation.
+- MCP provenance metadata transport is not connected to the Python proxy's
+  provenance registry or trust-validation implementation.
 - Agent44 is an engineering experiment, not a production security product.
 
 ## Roadmap
@@ -284,8 +288,8 @@ The following items are planned work, not implemented release commitments:
 
 - Define and test a shared MCP provenance metadata contract, including
   reference registration, validation, and response propagation.
-- Release the verified TypeScript transport integration in a separately
-  authorized package version, then validate that published tarball.
+- Publish candidate TypeScript `0.2.0` only after separate authorization, then
+  validate the published package.
 - Reconcile evaluation report denominators and attack-block fields with the
   frozen JSON results before making further metric claims.
 - Pursue separately authorized held-out evaluation and broader
