@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -42,35 +44,63 @@ function createProxyClient(
 }
 
 async function testPolicyAndMetadataFlow(): Promise<void> {
-  const client = createProxyClient(['python', metadataServerPath], true);
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'agent44-mcp-integration-'));
+  const callLogPath = path.join(tempDir, 'tool-calls.jsonl');
+  const client = createProxyClient(
+    ['python', metadataServerPath, '--call-log', callLogPath],
+    true,
+  );
   try {
-    await client.connect();
-    const tools = await client.listTools();
-    assert.deepEqual(new Set(tools.map((tool) => tool.name)), new Set(['add', 'echo']));
+    try {
+      await client.connect();
+      const tools = await client.listTools();
+      assert.deepEqual(new Set(tools.map((tool) => tool.name)), new Set(['add', 'echo']));
 
-    const sum = await client.callTool('add', { a: 2, b: 3 });
-    assert.equal(sum.success, true);
-    assert.equal(sum.text, '5');
-    assert.equal(sum.error, null);
+      const sum = await client.callTool('add', { a: 2, b: 3 });
+      assert.equal(sum.success, true);
+      assert.equal(sum.text, '5');
+      assert.equal(sum.error, null);
 
-    const reference = { id: 'integration-reference', sourceTool: 'echo' };
-    const echo = await client.callTool('echo', { message: 'metadata passed' }, reference);
-    assert.equal(echo.success, true);
-    assert.equal(echo.text, 'metadata passed');
-    assert.deepEqual(echo.provenance, reference);
+      const reference = { id: 'integration-reference', sourceTool: 'echo' };
+      const echo = await client.callTool('echo', { message: 'metadata passed' }, reference);
+      assert.equal(echo.success, true);
+      assert.equal(echo.text, 'metadata passed');
+      assert.deepEqual(echo.provenance, reference);
 
-    const denied = await client.callTool('echo', {
-      message: 'must be denied',
-      eval: true,
-    });
-    assert.equal(denied.success, false);
-    assert.match(denied.error ?? '', /deny-eval-flag/);
+      const denied = await client.callTool('echo', {
+        message: 'must be denied',
+        eval: true,
+      });
+      assert.equal(denied.success, false);
+      assert.match(denied.error ?? '', /deny-eval-flag/);
 
-    const unknown = await client.callTool('not_a_tool', {});
-    assert.equal(unknown.success, false);
-    assert.match(unknown.error ?? '', /denied by policy/);
+      const unknown = await client.callTool('not_a_tool', {});
+      assert.equal(unknown.success, false);
+      assert.match(unknown.error ?? '', /denied by policy/);
+    } finally {
+      await client.cleanup();
+    }
+
+    const recordedCalls = (await readFile(callLogPath, 'utf8'))
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as {
+        name: string;
+        arguments: Record<string, unknown>;
+      });
+    assert.deepEqual(recordedCalls.map((call) => call.name), ['add', 'echo']);
+    assert.equal(
+      recordedCalls.some((call) => call.arguments.message === 'must be denied'),
+      false,
+      'policy-denied tool call must not execute downstream',
+    );
+    assert.equal(
+      recordedCalls.some((call) => call.name === 'not_a_tool'),
+      false,
+      'policy-denied unknown tool must not execute downstream',
+    );
   } finally {
-    await client.cleanup();
+    await rm(tempDir, { recursive: true, force: true });
   }
 
   await assert.rejects(clientCallAfterCleanup(client), /has been closed/);
