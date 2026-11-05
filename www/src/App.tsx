@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import Nav from "./components/Nav";
+import SiteLayout from "./components/SiteLayout";
 import Hero from "./components/Hero";
 import Problem from "./components/Problem";
 import Architecture from "./components/Architecture";
@@ -12,17 +12,19 @@ import NotFound from "./components/NotFound";
 export default function App() {
   return (
     <Router>
-      <Nav />
-      <Routes>
-        <Route path="/" element={<Hero />} />
-        <Route path="problem" element={<Problem />} />
-        <Route path="architecture" element={<Architecture />} />
-        <Route path="policy" element={<PolicyEngine />} />
-        <Route path="provenance" element={<Provenance />} />
-        <Route path="evaluation" element={<Evaluation />} />
-        <Route path="github" element={<Developer />} />
-        <Route path="*" element={<NotFound />} />
-      </Routes>
+      <SiteLayout>
+        <Routes>
+          <Route path="/" element={<Hero />} />
+          <Route path="problem" element={<Problem />} />
+          <Route path="architecture" element={<Architecture />} />
+          <Route path="policy" element={<PolicyEngine />} />
+          <Route path="policy-lab" element={<PolicyEngine />} />
+          <Route path="provenance" element={<Provenance />} />
+          <Route path="evaluation" element={<Evaluation />} />
+          <Route path="github" element={<Developer />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </SiteLayout>
     </Router>
   );
 }
