@@ -1,5 +1,7 @@
 # Agent44 - A Decision Layer for AI Agent Tool Calls
 
+[![npm version](https://img.shields.io/npm/v/@imrohit44/agent44-ts-client)](https://www.npmjs.com/package/@imrohit44/agent44-ts-client)
+
 Agent44 is an engineering experiment in enforcing policy at the MCP tool-call
 boundary. AI agents can invoke tools, but deciding whether a call may execute
 also requires policy enforcement, provenance awareness, and measurable decision
@@ -110,10 +112,13 @@ status.
 - **Evaluation runner and synthetic corpus:** the runner replays scenarios and
   reports decision outcomes, per-category results, and adapter outcomes. Its
   measurements are scoped to individual synthetic tool-call scenarios.
-- **TypeScript client component:** the repository's candidate `0.2.0` adds a
+- **TypeScript client component:** the published `0.2.0` adds a
   real stdio MCP client flow and passes a local integration test through the
-  Python proxy. The publicly published `0.1.0` predates that functionality.
-  See [TypeScript Client](docs/typescript-client.md).
+  Python proxy. Version `0.2.0` is published on
+  [npm](https://www.npmjs.com/package/@imrohit44/agent44-ts-client); install
+  it with `npm install @imrohit44/agent44-ts-client@0.2.0`. See
+  [TypeScript Client](docs/typescript-client.md) and the
+  [v0.2.0 GitHub release](https://github.com/imrohit44/Agent44/releases/tag/v0.2.0).
 
 ## Quickstart
 
@@ -250,19 +255,18 @@ for definitions and limits.
   ESM package with generated `dist/index.js` and `dist/index.d.ts` exports.
   The checked-out source passes a real stdio MCP integration test through the
   Python proxy, covering tool discovery/calls, policy denial with a downstream
-  execution-count assertion, and provenance metadata round-trip. Candidate
-  `0.2.0` is prepared and locally tested from a tarball; it has not been
-  published. The published npm `0.1.0` predates these transport changes.
-  Metadata transport does not validate provenance or establish end-to-end
-  enforcement; see [TypeScript Client](docs/typescript-client.md).
+  execution-count assertion, and provenance metadata round-trip. The published
+  npm `0.2.0` includes this transport integration. Metadata transport does not
+  validate provenance or establish end-to-end enforcement; see
+  [TypeScript Client](docs/typescript-client.md).
 - **Website:** a private Vite/React source project exists under `www/`. Its
   current production build does not pass because the package's build script
   invokes `tsc` without a project configuration in that directory. Deployment
   is not verified.
-- **Publication:** `@imrohit44/agent44-ts-client@0.1.0` is publicly published.
-  Candidate `0.2.0` is not published; any publication requires separate
-  authorization. The TypeScript package license is Apache-2.0, matching the
-  repository license.
+- **Publication:** `@imrohit44/agent44-ts-client@0.2.0` is publicly published.
+  The TypeScript package license is Apache-2.0, matching the repository
+  license. See the [npm package](https://www.npmjs.com/package/@imrohit44/agent44-ts-client)
+  and [GitHub v0.2.0 release](https://github.com/imrohit44/Agent44/releases/tag/v0.2.0).
 - **Console command:** `agent44` provides `init`, `validate`, `run`, and
   `inspect` commands. `agent44 run` delegates proxy options and the downstream
   server command to the existing proxy entry point. The module-based proxy
@@ -288,8 +292,8 @@ The following items are planned work, not implemented release commitments:
 
 - Define and test a shared MCP provenance metadata contract, including
   reference registration, validation, and response propagation.
-- Publish candidate TypeScript `0.2.0` only after separate authorization, then
-  validate the published package.
+- Extend transport-failure integration coverage and keep the published
+  TypeScript package documentation synchronized with verified behavior.
 - Reconcile evaluation report denominators and attack-block fields with the
   frozen JSON results before making further metric claims.
 - Pursue separately authorized held-out evaluation and broader

@@ -1,15 +1,14 @@
 # Agent44 TypeScript Client
 
 The Agent44 TypeScript Client is an experimental ESM wrapper around the
-Model Context Protocol (MCP) client SDK. The proposed `0.2.0` release adds
+Model Context Protocol (MCP) client SDK. Version `0.2.0` adds
 stdio MCP connection, session initialization, tool discovery, tool calls, and
 child-process cleanup. It also carries a `provenanceReference` through MCP
 `_meta`.
 
-**Release status:** `0.1.0` is the published release and predates the
-transport integration described below. The `0.2.0` version and integration
-are prepared in this repository but have not been published. The API remains
-experimental and is not a stable SDK contract.
+**Release status:** `0.2.0` is published. It includes the stdio transport
+integration described below; `0.1.0` predates that functionality. The API
+remains experimental and is not a stable SDK contract.
 
 The Python proxy forwards a well-formed `provenanceReference` metadata object
 to the downstream MCP server and preserves downstream response metadata. It
@@ -24,20 +23,14 @@ not end-to-end provenance enforcement or safety.
 
 ## Installation
 
-Install the published package:
-
-```sh
-npm install @imrohit44/agent44-ts-client
-```
-
-Until `0.2.0` is explicitly released, this command installs published version
-`0.1.0`, which does not include the transport integration. After an authorized
-`0.2.0` publication, the same command will install the new version; the
-intended version can be requested explicitly with:
+Install the published package version:
 
 ```sh
 npm install @imrohit44/agent44-ts-client@0.2.0
 ```
+
+See the [npm package](https://www.npmjs.com/package/@imrohit44/agent44-ts-client)
+and [GitHub v0.2.0 release](https://github.com/imrohit44/Agent44/releases/tag/v0.2.0).
 
 ## Exports and API
 
@@ -123,8 +116,8 @@ proxy and a local deterministic MCP server. It verifies initialization, tool
 discovery, an `add` result, policy denial (including no downstream execution
 for denied calls), metadata round-tripping, unknown-tool failure handling, and
 shutdown. It requires `uv` and the repository's Python dependencies; it is
-not run by the published package's `npm test`. The behavior is verified from
-the current source and candidate tarball, not from an npm-published `0.2.0`.
+not run by the published package's `npm test`. This behavior was verified from
+the release source and published package tarball.
 
 The public npm `0.1.0` does not have this transport behavior. No end-to-end
 provenance validation/lineage, delegation enforcement, remote MCP transport,

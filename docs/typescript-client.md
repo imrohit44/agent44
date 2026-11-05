@@ -2,9 +2,8 @@
 
 The checked-out `typescript/client/index.ts` implements an experimental MCP
 stdio client wrapper. The repository's integration test launches the Python
-Agent44 proxy and a local deterministic MCP server. The published `0.1.0`
-predates that transport integration. The candidate `0.2.0` includes it, but
-has not been published.
+Agent44 proxy and a local deterministic MCP server. Published version
+`0.2.0` includes that transport integration; the earlier `0.1.0` predates it.
 
 ## Public API
 
@@ -43,8 +42,7 @@ closes the SDK transport and child process.
 ## Installation and setup
 
 The package directory has a `package.json`, lockfile, TypeScript config, and
-local scripts. Use the checked-in source tree rather than assuming an npm
-package is published:
+local scripts. To work on the checked-in source tree:
 
 ```powershell
 cd typescript
@@ -55,11 +53,11 @@ npm run build
 npm pack --dry-run
 ```
 
-The package identity is `@imrohit44/agent44-ts-client`. Version `0.1.0` is
-publicly published and its contents predate the transport changes described
-here. The working tree is prepared as version `0.2.0`, but has not been
-published. For consumer-facing examples and limitations, see the
-[TypeScript package README](../typescript/README.md).
+The package identity is `@imrohit44/agent44-ts-client`. Version `0.2.0` is
+publicly published. For consumer-facing examples and limitations, see the
+[TypeScript package README](../typescript/README.md), the
+[npm package](https://www.npmjs.com/package/@imrohit44/agent44-ts-client),
+and [GitHub v0.2.0 release](https://github.com/imrohit44/Agent44/releases/tag/v0.2.0).
 
 The package is ESM-only. `npm run build` emits `dist/index.js` and
 `dist/index.d.ts`; the package manifest's `main`, `module`, `types`, and
@@ -106,11 +104,9 @@ adds this to the MCP request:
 response `_meta`. The Python proxy forwards a dictionary-valued reference to
 the downstream MCP server and returns downstream result metadata unchanged.
 The integration test verifies that transport round-trip with a local fixture.
-The proxy forwards dictionary-valued `provenanceReference` metadata to the
-downstream MCP server and returns downstream result metadata unchanged. It
-does not validate the reference against its provenance registry or use it as
-policy evidence. This does not establish end-to-end provenance enforcement.
-See [Provenance](provenance.md).
+The proxy does not validate the reference against its provenance registry or
+use it as policy evidence. This does not establish end-to-end provenance
+enforcement. See [Provenance](provenance.md).
 
 ## Verification status
 
@@ -129,8 +125,8 @@ See [Provenance](provenance.md).
   successful tool calls, policy denial (including absence of downstream
   execution for denied calls), metadata round-trip, unknown-tool errors, and
   shutdown through the checked-out Python proxy.
-- The proposed `0.2.0` package is tested from its local npm tarball in a clean
-  consumer. This does not verify an npm publication. The published `0.1.0`
-  predates the transport changes.
+- The `0.2.0` source was tested from the tarball in a clean consumer; the
+  published tarball has the same integrity as the preflighted artifact. The
+  published `0.1.0` predates the transport changes.
 - The package license is Apache-2.0, as confirmed by the maintainer; the
   package metadata, lockfile, and included license notice agree.
