@@ -6,10 +6,10 @@ const Problem = () => {
       <div className="max-w-7xl mx-auto px-6">
         <div className="bg-card p-8 rounded-2xl border border-border/20">
           <h2 className="text-3xl lg:text-4xl font-bold mb-6">The Challenge</h2>
-          <p className="text-muted/80 text-lg leading-relaxed">
+          <p className="text-muted-foreground text-lg leading-relaxed">
             AI agents can invoke tools via the Model-Context-Protocol (MCP), but tool execution needs a layer that evaluates whether a call should proceed. Without such a layer, agents blindly trust model outputs, risking unsafe or unexpected tool behavior.
           </p>
-          <ul className="mt-6 space-y-3 text-muted/80 text-sm">
+          <ul className="mt-6 space-y-3 text-muted-foreground text-sm">
             <li>Agents may invoke tools with unbounded authority</li>
             <li>No built-in mechanism to evaluate call safety</li>
             <li>Policy decisions must be deterministic and auditable</li>

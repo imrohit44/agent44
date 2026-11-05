@@ -6,13 +6,13 @@ const Architecture = () => {
       <div className="max-w-7xl mx-auto px-6">
         <div className="bg-card p-8 rounded-2xl border border-border/20">
           <h2 className="text-3xl lg:text-4xl font-bold mb-6">Architecture</h2>
-          <div className="prose max-w-none">
-            <p>
+          <div className="max-w-none leading-relaxed">
+            <p className="text-foreground/90">
               Agent44 provides a policy layer that sits between AI agents and MCP
               downstream tools, ensuring tool calls are evaluated for safety,
               explainability, and measurability before execution.
             </p>
-            <ol className="mt-6 space-y-3 text-muted/80 text-sm">
+            <ol className="mt-6 list-decimal list-inside space-y-3 text-muted-foreground text-sm">
               <li>
                 AI Agent — The model-driven agent that generates tool calls.
               </li>
