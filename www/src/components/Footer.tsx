@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+
 const footerLinks = [
   {
     href: "https://github.com/imrohit44/Agent44",
@@ -8,8 +10,12 @@ const footerLinks = [
     label: "npm",
   },
   {
-    href: "https://github.com/imrohit44/Agent44/tree/main/docs",
+    to: "/docs",
     label: "Documentation",
+  },
+  {
+    to: "/releases",
+    label: "Releases",
   },
 ];
 
@@ -20,9 +26,15 @@ export default function Footer() {
         <p>Agent44 — an engineering experiment in policy for MCP tool calls.</p>
         <nav aria-label="Project links" className="site-footer__links">
           {footerLinks.map((link) => (
-            <a href={link.href} key={link.label}>
-              {link.label}
-            </a>
+            "to" in link && typeof link.to === "string" ? (
+              <Link key={link.label} to={link.to}>
+                {link.label}
+              </Link>
+            ) : (
+              <a href={link.href} key={link.label}>
+                {link.label}
+              </a>
+            )
           ))}
         </nav>
       </div>

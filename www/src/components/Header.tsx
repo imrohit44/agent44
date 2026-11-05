@@ -3,22 +3,15 @@ import { Link, NavLink, useLocation } from "react-router-dom";
 
 const documentationLinks = [
   {
-    href: "https://github.com/imrohit44/Agent44/tree/main/docs",
-    label: "Docs",
-  },
-  {
     href: "https://github.com/imrohit44/Agent44/blob/main/docs/development.md",
     label: "Engineering",
-  },
-  {
-    href: "https://github.com/imrohit44/Agent44/releases",
-    label: "Releases",
   },
 ];
 
 const internalLinks = [
   { to: "/architecture", label: "Architecture" },
   { to: "/policy-lab", label: "Policy Lab" },
+  { to: "/docs", label: "Docs" },
 ];
 
 function NavigationLinks({ onNavigate }: { onNavigate?: () => void }) {
@@ -45,6 +38,14 @@ function NavigationLinks({ onNavigate }: { onNavigate?: () => void }) {
           {link.label}
         </a>
       ))}
+      <NavLink
+        className="site-nav__link"
+        end
+        onClick={onNavigate}
+        to="/releases"
+      >
+        Releases
+      </NavLink>
     </>
   );
 }

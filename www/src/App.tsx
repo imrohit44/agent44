@@ -7,6 +7,8 @@ import PolicyEngine from "./components/PolicyEngine";
 import Provenance from "./components/Provenance";
 import Evaluation from "./components/Evaluation";
 import Developer from "./components/Developer";
+import Documentation from "./components/Documentation";
+import Releases from "./components/Releases";
 import NotFound from "./components/NotFound";
 
 export default function App() {
@@ -22,6 +24,8 @@ export default function App() {
           <Route path="provenance" element={<Provenance />} />
           <Route path="evaluation" element={<Evaluation />} />
           <Route path="github" element={<Developer />} />
+          <Route path="docs" element={<Documentation />} />
+          <Route path="releases" element={<Releases />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </SiteLayout>
