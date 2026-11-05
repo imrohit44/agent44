@@ -9,6 +9,8 @@ import Evaluation from "./components/Evaluation";
 import Developer from "./components/Developer";
 import Documentation from "./components/Documentation";
 import Releases from "./components/Releases";
+import Engineering from "./components/Engineering";
+import Journey from "./components/Journey";
 import NotFound from "./components/NotFound";
 
 export default function App() {
@@ -26,6 +28,8 @@ export default function App() {
           <Route path="github" element={<Developer />} />
           <Route path="docs" element={<Documentation />} />
           <Route path="releases" element={<Releases />} />
+          <Route path="engineering" element={<Engineering />} />
+          <Route path="journey" element={<Journey />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </SiteLayout>

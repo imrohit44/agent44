@@ -1,17 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 
-const documentationLinks = [
-  {
-    href: "https://github.com/imrohit44/Agent44/blob/main/docs/development.md",
-    label: "Engineering",
-  },
-];
-
 const internalLinks = [
   { to: "/architecture", label: "Architecture" },
   { to: "/policy-lab", label: "Policy Lab" },
   { to: "/docs", label: "Docs" },
+  { to: "/engineering", label: "Engineering" },
+  { to: "/releases", label: "Releases" },
+  { to: "/journey", label: "Journey" },
 ];
 
 function NavigationLinks({ onNavigate }: { onNavigate?: () => void }) {
@@ -28,24 +24,6 @@ function NavigationLinks({ onNavigate }: { onNavigate?: () => void }) {
           {link.label}
         </NavLink>
       ))}
-      {documentationLinks.map((link) => (
-        <a
-          className="site-nav__link"
-          href={link.href}
-          key={link.label}
-          onClick={onNavigate}
-        >
-          {link.label}
-        </a>
-      ))}
-      <NavLink
-        className="site-nav__link"
-        end
-        onClick={onNavigate}
-        to="/releases"
-      >
-        Releases
-      </NavLink>
     </>
   );
 }

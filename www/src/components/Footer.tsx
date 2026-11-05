@@ -17,6 +17,10 @@ const footerLinks = [
     to: "/releases",
     label: "Releases",
   },
+  {
+    to: "/journey",
+    label: "Project Journey",
+  },
 ];
 
 export default function Footer() {
