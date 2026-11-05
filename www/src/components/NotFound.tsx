@@ -1,16 +1,19 @@
-import React from "react";
 import { Link } from "react-router-dom";
+import PageHeader from "./PageHeader";
 
-const NotFound = () => {
+export default function NotFound() {
   return (
-    <section className="min-h-screen flex items-center justify-center">
-      <div className="text-center">
-        <h1 className="text-5xl font-bold text-destructive">404</h1>
-        <p className="text-muted-foreground mt-4">Page not found</p>
-        <Link to="/" className="text-accent mt-6">Go home</Link>
+    <section className="not-found-page">
+      <div className="site-container">
+        <PageHeader
+          description="The URL may be incorrect, or the page may have moved."
+          eyebrow="404 / PAGE NOT FOUND"
+          title="This route does not exist."
+        />
+        <Link className="not-found-page__link" to="/">
+          Return to Agent44 home
+        </Link>
       </div>
     </section>
   );
-};
-
-export default NotFound;
+}

@@ -1,43 +1,73 @@
-import React from "react";
+import PageHeader from "./PageHeader";
+import Section from "./Section";
 
-const Developer = () => {
+export default function Developer() {
   return (
-    <section className="py-24 lg:py-32 relative">
-      <div className="max-w-7xl mx-auto px-6">
-        <h1 className="text-3xl lg:text-4xl font-bold mb-8">For Developers</h1>
-        <div className="grid md:grid-cols-2 gap-8">
-          <div>
-            <h3 className="text-2xl font-bold mb-6">Python Project Setup</h3>
-            <ol className="space-y-3 text-muted-foreground text-sm">
-              <li>Install the repository environment with <code>uv sync</code>.</li>
-              <li>Start the proxy with a policy and downstream MCP command.</li>
-              <li>See the repository quickstart and policy documentation for supported configuration.</li>
-            </ol>
-          </div>
-          <div>
-            <h3 className="text-2xl font-bold mb-6">TypeScript Client Installation</h3>
-            <ol className="space-y-3 text-muted-foreground text-sm">
-              <li>Install the published client with <code>npm install @imrohit44/agent44-ts-client@0.2.0</code>.</li>
-              <li><code>import {"{ createAgent44ProxyClient }"} from &apos;@imrohit44/agent44-ts-client&apos;</code></li>
-              <li>The client supports MCP stdio connection, discovery, tool calls, and cleanup.</li>
-              <li>Provenance metadata transport does not validate provenance or authorize calls.</li>
-            </ol>
-          </div>
+    <div className="legacy-page developer-page">
+      <section className="legacy-page__intro">
+        <div className="site-container">
+          <PageHeader
+            description="Set up the Python proxy and use the separately published TypeScript MCP client."
+            eyebrow="DEVELOPER RESOURCES"
+            title="Start with the implementation."
+          />
         </div>
-        <div className="mt-8 pt-8 border-t border-border/20">
-          <h3 className="text-2xl font-bold mb-4">GitHub Repository</h3>
-          <p className="text-muted-foreground">
-            <a href="https://github.com/imrohit44/Agent44" target="_blank" rel="noopener noreferrer" className="underline hover:text-accent transition-colors">
-              github.com/imrohit44/Agent44
-            </a>
-          </p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Version 0.2.0 is published and its stdio integration was verified against a local MCP server. The website itself is not evidence of production security or end-to-end provenance enforcement.
-          </p>
-        </div>
-      </div>
-    </section>
-  );
-};
+      </section>
 
-export default Developer;
+      <Section className="legacy-page__content">
+        <div className="legacy-resource-columns">
+          <article>
+            <p className="legacy-overline">PYTHON PROXY</p>
+            <h2>Run from the repository</h2>
+            <ol>
+              <li>Install the project environment with <code>uv sync</code>.</li>
+              <li>
+                Start the proxy with a supported policy and downstream MCP
+                command.
+              </li>
+              <li>
+                Follow the{" "}
+                <a href="https://github.com/imrohit44/Agent44/blob/main/README.md">
+                  repository quickstart
+                </a>{" "}
+                and{" "}
+                <a href="https://github.com/imrohit44/Agent44/blob/main/docs/policy-engine.md">
+                  policy guide
+                </a>
+                .
+              </li>
+            </ol>
+          </article>
+          <article>
+            <p className="legacy-overline">TYPESCRIPT / ESM</p>
+            <h2>Install the published client</h2>
+            <pre className="legacy-code"><code>npm install @imrohit44/agent44-ts-client</code></pre>
+            <p>
+              Client v0.2.0 supports MCP stdio connection, discovery, tool
+              calls, and cleanup. It does not bundle the Python proxy.
+            </p>
+            <a href="https://www.npmjs.com/package/@imrohit44/agent44-ts-client">
+              View the npm package
+            </a>
+          </article>
+        </div>
+      </Section>
+
+      <Section className="legacy-page__principles">
+        <header className="legacy-section-heading">
+          <p className="legacy-overline">INTEGRATION BOUNDARY</p>
+          <h2>Metadata transport is not validation.</h2>
+          <p>
+            The client can carry a provenance reference in MCP metadata.
+            Transport does not validate provenance or authorize a tool call.
+          </p>
+        </header>
+        <p className="legacy-source-link">
+          <a href="https://github.com/imrohit44/Agent44">
+            Open the Agent44 GitHub repository
+          </a>
+        </p>
+      </Section>
+    </div>
+  );
+}

@@ -321,8 +321,9 @@ export default function Hero() {
           <div className="home-evidence__item">
             <strong>5 / 5</strong>
             <span>
-              Release-checker steps passed, including tests, lint comparison,
-              import checks, and evaluation path integrity check.
+              Historical release-checker snapshot: 5 of 5 checks passed,
+              including tests, lint comparison, imports, and evaluation path
+              integrity.
             </span>
           </div>
           <div className="home-evidence__item">

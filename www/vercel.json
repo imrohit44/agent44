@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "framework": "vite",
+  "installCommand": "npm install",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "trailingSlash": false,
+  "rewrites": [
+    { "source": "/problem", "destination": "/problem/index.html" },
+    { "source": "/architecture", "destination": "/architecture/index.html" },
+    { "source": "/policy", "destination": "/policy/index.html" },
+    { "source": "/policy-lab", "destination": "/policy-lab/index.html" },
+    { "source": "/provenance", "destination": "/provenance/index.html" },
+    { "source": "/evaluation", "destination": "/evaluation/index.html" },
+    { "source": "/github", "destination": "/github/index.html" },
+    { "source": "/docs", "destination": "/docs/index.html" },
+    { "source": "/releases", "destination": "/releases/index.html" },
+    { "source": "/engineering", "destination": "/engineering/index.html" },
+    { "source": "/journey", "destination": "/journey/index.html" }
+  ]
+}

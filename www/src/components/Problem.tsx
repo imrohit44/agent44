@@ -1,24 +1,59 @@
-import React from "react";
+import PageHeader from "./PageHeader";
+import Section from "./Section";
 
-const Problem = () => {
+const considerations = [
+  {
+    title: "Policy is optional at the proxy boundary.",
+    description:
+      "Without a configured policy, the proxy forwards tool calls. When enabled, it evaluates eligible tools/call requests before forwarding.",
+  },
+  {
+    title: "Decision order should be explicit.",
+    description:
+      "Deterministic policy tiers resolve calls before an optional adapter is considered for configured, eligible tools.",
+  },
+  {
+    title: "An allow is scoped permission.",
+    description:
+      "ALLOW means the configured policy permits this call to proceed. It does not certify that the request is safe or that every unsafe action will be recognized.",
+  },
+];
+
+export default function Problem() {
   return (
-    <section className="py-24 lg:py-32 relative">
-      <div className="max-w-7xl mx-auto px-6">
-        <div className="bg-card p-8 rounded-2xl border border-border/20">
-          <h1 className="text-3xl lg:text-4xl font-bold mb-6">The Challenge</h1>
-          <p className="text-muted-foreground text-lg leading-relaxed">
-            AI agents can invoke tools via the Model-Context-Protocol (MCP), but tool execution needs a layer that evaluates whether a call should proceed. Without such a layer, agents blindly trust model outputs, risking unsafe or unexpected tool behavior.
-          </p>
-          <ul className="mt-6 space-y-3 text-muted-foreground text-sm">
-            <li>Agents may invoke tools with unbounded authority</li>
-            <li>No built-in mechanism to evaluate call safety</li>
-            <li>Policy decisions must be deterministic and auditable</li>
-            <li>Trust must be preserved or denied without silent promotion</li>
-          </ul>
+    <div className="legacy-page problem-page">
+      <section className="legacy-page__intro">
+        <div className="site-container">
+          <PageHeader
+            description="An MCP client can request a tool call and a downstream server can execute it. Agent44 explores an explicit policy decision point between those steps."
+            eyebrow="THE PROBLEM / TOOL EXECUTION"
+            title="A tool request needs a decision boundary."
+          />
         </div>
-      </div>
-    </section>
-  );
-};
+      </section>
 
-export default Problem;
+      <Section className="legacy-page__content">
+        <header className="legacy-section-heading">
+          <p className="legacy-overline">THE ENGINEERING QUESTION</p>
+          <h2>What happens between request and execution?</h2>
+          <p>
+            MCP provides the client/server interaction. It does not define the
+            application-specific policy an operator may want to apply before a
+            tool call is sent downstream.
+          </p>
+        </header>
+        <ol className="legacy-principles">
+          {considerations.map((item, index) => (
+            <li key={item.title}>
+              <span>{String(index + 1).padStart(2, "0")}</span>
+              <div>
+                <h3>{item.title}</h3>
+                <p>{item.description}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </Section>
+    </div>
+  );
+}

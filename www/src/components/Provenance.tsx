@@ -1,41 +1,73 @@
-import React from "react";
+import PageHeader from "./PageHeader";
+import Section from "./Section";
 
-const Provenance = () => {
+const trustClasses = [
+  {
+    name: "TRUSTED",
+    description:
+      "A value registered at an explicit trusted boundary or promoted through an authorized validation transition.",
+  },
+  {
+    name: "UNTRUSTED",
+    description: "External input or a value whose reference is unknown.",
+  },
+  {
+    name: "DERIVED_UNTRUSTED",
+    description:
+      "A derived value with missing, unknown, or untrusted lineage.",
+  },
+];
+
+export default function Provenance() {
   return (
-    <section className="py-24 lg:py-32 relative">
-      <div className="max-w-7xl mx-auto px-6">
-        <h1 className="text-3xl lg:text-4xl font-bold mb-8">Provenance Propagation</h1>
-        <div className="grid md:grid-cols-2 gap-8">
-          <div>
-            <h3 className="text-2xl font-bold mb-6">Trust Classifications</h3>
-            <dl className="space-y-4 text-sm">
-              <div>
-                <dt className="font-medium">TRUSTED</dt>
-                <dd className="text-muted-foreground">Assigned at an explicit trusted boundary or by an authorized validation transition.</dd>
-              </div>
-              <div>
-                <dt className="font-medium">UNTRUSTED</dt>
-                <dd className="text-muted-foreground">Classification for external input or an unknown reference.</dd>
-              </div>
-              <div>
-                <dt className="font-medium">DERIVED_UNTRUSTED</dt>
-                <dd className="text-muted-foreground">A derived value with missing, unknown, or untrusted lineage.</dd>
-              </div>
-            </dl>
-          </div>
-          <div>
-            <h3 className="text-2xl font-bold mb-6">Key Principles</h3>
-            <ul className="space-y-4 text-muted-foreground text-sm">
-              <li>Caller-supplied fields do not establish trust.</li>
-              <li>Unknown references do not become trusted by being well formed.</li>
-              <li>The TypeScript client transports provenance metadata, but the proxy does not validate it against its provenance registry.</li>
-              <li>Metadata transport is not provenance-based authorization.</li>
-            </ul>
-          </div>
+    <div className="legacy-page provenance-page">
+      <section className="legacy-page__intro">
+        <div className="site-container">
+          <PageHeader
+            description="The Python provenance implementation tracks value trust and lineage within its registry. This is distinct from the TypeScript client's metadata transport."
+            eyebrow="PROVENANCE / PYTHON IMPLEMENTATION"
+            title="Track trust without trusting a reference by itself."
+          />
         </div>
-      </div>
-    </section>
-  );
-};
+      </section>
 
-export default Provenance;
+      <Section className="legacy-page__content">
+        <header className="legacy-section-heading">
+          <p className="legacy-overline">TRUST CLASSIFICATIONS</p>
+          <h2>Trust depends on recorded lineage.</h2>
+        </header>
+        <dl className="legacy-trust-list">
+          {trustClasses.map((item) => (
+            <div key={item.name}>
+              <dt>{item.name}</dt>
+              <dd>{item.description}</dd>
+            </div>
+          ))}
+        </dl>
+      </Section>
+
+      <Section className="legacy-page__principles">
+        <header className="legacy-section-heading">
+          <p className="legacy-overline">BOUNDARIES</p>
+          <h2>Transport does not establish trust.</h2>
+        </header>
+        <ul className="legacy-bullet-list">
+          <li>Caller-supplied argument fields do not establish trust.</li>
+          <li>A well-formed but unknown reference does not become trusted.</li>
+          <li>
+            The TypeScript client can carry{" "}
+            <code>_meta.provenanceReference</code> as MCP metadata.
+          </li>
+          <li>
+            Metadata transport is not registry validation or authorization.
+          </li>
+        </ul>
+        <p className="legacy-source-link">
+          <a href="https://github.com/imrohit44/Agent44/blob/main/docs/provenance.md">
+            Read the provenance implementation guide
+          </a>
+        </p>
+      </Section>
+    </div>
+  );
+}

@@ -190,6 +190,7 @@ export default function Architecture() {
             description="Follow an MCP tool request through Agent44—from client connection and tool discovery to policy evaluation and downstream execution."
             eyebrow="ARCHITECTURE / REQUEST LIFECYCLE"
             title="Understand every decision between agent and tool."
+            titleId="architecture-title"
           />
           <div className="architecture-intro__overview">
             <p>

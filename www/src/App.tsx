@@ -12,11 +12,13 @@ import Releases from "./components/Releases";
 import Engineering from "./components/Engineering";
 import Journey from "./components/Journey";
 import NotFound from "./components/NotFound";
+import PageMetadata from "./components/PageMetadata";
 
 export default function App() {
   return (
     <Router>
       <SiteLayout>
+        <PageMetadata />
         <Routes>
           <Route path="/" element={<Hero />} />
           <Route path="problem" element={<Problem />} />

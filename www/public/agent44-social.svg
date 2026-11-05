@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#0b0d10"/>
+  <g stroke="#252b32" stroke-width="1">
+    <path d="M0 80h1200M0 160h1200M0 240h1200M0 320h1200M0 400h1200M0 480h1200M0 560h1200"/>
+    <path d="M80 0v630M160 0v630M240 0v630M320 0v630M400 0v630M480 0v630M560 0v630M640 0v630M720 0v630M800 0v630M880 0v630M960 0v630M1040 0v630M1120 0v630"/>
+  </g>
+  <rect x="74" y="82" width="20" height="20" fill="#00d9f5"/>
+  <text x="116" y="101" fill="#e9f0f3" font-family="Arial, sans-serif" font-size="26" font-weight="700">Agent44</text>
+  <text x="74" y="250" fill="#00d9f5" font-family="Arial, sans-serif" font-size="20" letter-spacing="3">MCP POLICY INFRASTRUCTURE</text>
+  <text x="74" y="330" fill="#e9f0f3" font-family="Arial, sans-serif" font-size="64" font-weight="700">A decision layer</text>
+  <text x="74" y="405" fill="#e9f0f3" font-family="Arial, sans-serif" font-size="64" font-weight="700">for MCP tool calls.</text>
+  <text x="76" y="485" fill="#a5afb8" font-family="Arial, sans-serif" font-size="24">Policy before eligible downstream tool execution.</text>
+  <path d="M76 548h1048" fill="none" stroke="#00d9f5" stroke-width="2"/>
+  <text x="76" y="586" fill="#a5afb8" font-family="monospace" font-size="16" letter-spacing="2">AGENT  →  MCP CLIENT  →  AGENT44  →  MCP TOOL</text>
+</svg>

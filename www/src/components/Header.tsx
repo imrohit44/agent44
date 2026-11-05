@@ -3,19 +3,32 @@ import { Link, NavLink, useLocation } from "react-router-dom";
 
 const internalLinks = [
   { to: "/architecture", label: "Architecture" },
-  { to: "/policy-lab", label: "Policy Lab" },
+  { to: "/policy-lab", activePaths: ["/policy", "/policy-lab"], label: "Policy Lab" },
   { to: "/docs", label: "Docs" },
   { to: "/engineering", label: "Engineering" },
   { to: "/releases", label: "Releases" },
   { to: "/journey", label: "Journey" },
 ];
 
-function NavigationLinks({ onNavigate }: { onNavigate?: () => void }) {
+function NavigationLinks({
+  onNavigate,
+  pathname,
+}: {
+  onNavigate?: () => void;
+  pathname: string;
+}) {
   return (
     <>
       {internalLinks.map((link) => (
         <NavLink
-          className="site-nav__link"
+          className={({ isActive }) =>
+            `site-nav__link ${
+              isActive ||
+              link.activePaths?.includes(pathname)
+                ? "site-nav__link--active"
+                : ""
+            }`
+          }
           end
           key={link.to}
           onClick={onNavigate}
@@ -72,7 +85,7 @@ export default function Header() {
         </Link>
 
         <nav aria-label="Primary navigation" className="site-nav site-nav--desktop">
-          <NavigationLinks />
+          <NavigationLinks pathname={location.pathname} />
         </nav>
 
         <button
@@ -94,7 +107,7 @@ export default function Header() {
         hidden={!menuOpen}
         id="mobile-primary-navigation"
       >
-        <NavigationLinks onNavigate={closeMenu} />
+        <NavigationLinks onNavigate={closeMenu} pathname={location.pathname} />
       </nav>
     </header>
   );

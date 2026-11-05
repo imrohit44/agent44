@@ -1,33 +1,63 @@
-import React from "react";
+import PageHeader from "./PageHeader";
+import Section from "./Section";
 
-const Evaluation = () => {
+export default function Evaluation() {
   return (
-    <section className="py-24 lg:py-32 relative">
-      <div className="max-w-7xl mx-auto px-6">
-        <h1 className="text-3xl lg:text-4xl font-bold mb-8">Evaluation</h1>
-        <div className="max-w-none space-y-4 leading-relaxed">
-          <p className="text-muted-foreground text-lg">
-            Agent44 includes a hand-authored synthetic corpus for replaying individual tool-call decisions. These measurements describe policy-decision outcomes, not end-to-end attack prevention.
-          </p>
-          <h3 className="text-2xl font-bold mt-10">Synthetic Evaluation Corpus</h3>
-          <ul className="mt-4 list-disc list-inside text-muted-foreground text-sm">
-            <li>The corpus is synthetic and does not represent observed production traffic.</li>
-            <li>Scenarios record tool-call inputs, categories, expected decisions, and rationale.</li>
-            <li>Results apply only to the evaluated scenarios and configuration.</li>
-          </ul>
-          <h3 className="text-2xl font-bold mt-10">False Allows / False Denies</h3>
-          <ul className="mt-4 list-disc list-inside text-muted-foreground text-sm">
-            <li>False allow: an expected-deny scenario observed as allowed.</li>
-            <li>False deny: an expected-allow scenario observed as denied.</li>
-          </ul>
-          <h3 className="text-2xl font-bold mt-10">Limitations</h3>
-          <p className="mt-4 text-muted-foreground">
-            The corpus does not establish universal production security. A DENY records that one call was not forwarded; it does not show whether a multi-step attack objective was prevented. The reported decision results should not be interpreted as latency, cost, or comprehensive security measurements.
-          </p>
+    <div className="legacy-page evaluation-page">
+      <section className="legacy-page__intro">
+        <div className="site-container">
+          <PageHeader
+            description="The repository's hand-authored synthetic corpus evaluates individual policy decisions against registered expected outcomes."
+            eyebrow="EVALUATION / SYNTHETIC CORPUS"
+            title="Measure decisions, not attack outcomes."
+          />
         </div>
-      </div>
-    </section>
-  );
-};
+      </section>
 
-export default Evaluation;
+      <Section className="legacy-page__content">
+        <header className="legacy-section-heading">
+          <p className="legacy-overline">WHAT IS MEASURED</p>
+          <h2>Scenario-level decision agreement.</h2>
+          <p>
+            Scenarios record tool-call inputs, categories, expected decisions,
+            and rationale. Results apply only to the evaluated scenarios and
+            configuration.
+          </p>
+        </header>
+        <dl className="legacy-metric-list">
+          <div>
+            <dt>False allow</dt>
+            <dd>An expected-DENY scenario observed as allowed.</dd>
+          </div>
+          <div>
+            <dt>False deny</dt>
+            <dd>An expected-ALLOW scenario observed as denied.</dd>
+          </div>
+        </dl>
+      </Section>
+
+      <Section className="legacy-page__principles">
+        <header className="legacy-section-heading">
+          <p className="legacy-overline">LIMITATIONS</p>
+          <h2>Interpret results within their scope.</h2>
+        </header>
+        <ul className="legacy-bullet-list">
+          <li>The corpus is synthetic, not observed production traffic.</li>
+          <li>
+            Decision correctness does not demonstrate end-to-end attack
+            prevention or universal production security.
+          </li>
+          <li>
+            Results are not latency, cost, or comprehensive security
+            measurements.
+          </li>
+        </ul>
+        <p className="legacy-source-link">
+          <a href="https://github.com/imrohit44/Agent44/blob/main/docs/evaluation.md">
+            Read evaluation definitions and limitations
+          </a>
+        </p>
+      </Section>
+    </div>
+  );
+}
