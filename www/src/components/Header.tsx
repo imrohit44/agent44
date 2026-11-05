@@ -80,7 +80,23 @@ export default function Header() {
           onClick={closeMenu}
           to="/"
         >
-          <span aria-hidden="true" className="site-brand__mark" />
+          <span aria-hidden="true" className="site-brand__mark">
+            <svg
+              aria-hidden="true"
+              fill="none"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M5 4.5h14v4M19 15.5v4H5v-15M2.5 12h10"
+                stroke="currentColor"
+                strokeLinecap="square"
+                strokeLinejoin="miter"
+                strokeWidth="1.5"
+              />
+              <circle cx="17.5" cy="12" fill="var(--logo-signal)" r="1.75" />
+            </svg>
+          </span>
           <span>Agent44</span>
         </Link>
 

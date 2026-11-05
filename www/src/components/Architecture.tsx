@@ -104,7 +104,11 @@ function ArchitectureDiagram() {
             <h3 id="call-path-title">Tool execution</h3>
             <p><code>tools/call</code></p>
           </div>
-          <ol aria-label="Tool call request path" className="architecture-path">
+          <ol
+            aria-label="Tool request passes from the MCP client through the proxy and policy evaluation"
+            className="architecture-path architecture-path--animated"
+          >
+            <li>Tool request</li>
             <li>MCP client</li>
             <li>Agent44 proxy</li>
             <li className="architecture-path__decision">Policy evaluation<br /><span>when enabled</span></li>
@@ -121,16 +125,23 @@ function ArchitectureDiagram() {
 
           <div className="architecture-outcomes">
             <div className="architecture-outcome architecture-outcome--allow">
+              <span aria-hidden="true" className="architecture-outcome__signal">
+                <span />
+              </span>
               <span className="architecture-outcome__label">ALLOW</span>
               <span className="architecture-outcome__route">
-                Forward call <span aria-hidden="true">→</span> Downstream MCP server
-                <span aria-hidden="true">→</span> Tool execution
+                Forward call <span aria-hidden="true">→</span> Downstream MCP
+                server <span aria-hidden="true">→</span> Tool execution
               </span>
             </div>
             <div className="architecture-outcome architecture-outcome--deny">
+              <span aria-hidden="true" className="architecture-outcome__signal">
+                <span />
+              </span>
               <span className="architecture-outcome__label">DENY</span>
               <span className="architecture-outcome__route">
-                Block at proxy <span aria-hidden="true">→</span> Return tool error to client
+                Block at proxy <span aria-hidden="true">→</span> Return tool
+                error to client
               </span>
             </div>
           </div>
