@@ -25,7 +25,7 @@ pre-1.0. It should not be treated as a stable SDK contract.
 After the package is published, install it with:
 
 ```sh
-npm install agent44-ts-client
+npm install @imrohit44/agent44-ts-client
 ```
 
 For pre-publication testing, install a locally-created package tarball instead.
@@ -47,7 +47,7 @@ import {
   createAgent44ProxyClient,
   type ProvenanceReference,
   type ToolCallResult,
-} from 'agent44-ts-client';
+} from '@imrohit44/agent44-ts-client';
 
 const client = createAgent44ProxyClient(
   'agent44',

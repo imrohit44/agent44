@@ -38,7 +38,7 @@ export class Agent44ProxyClient {
       args: ['--policy', 'policy.yaml', '--'],
     });
     this.client = new Client({
-      name: 'agent44-ts-client',
+      name: '@imrohit44/agent44-ts-client',
       version: '1.0.0',
     });
   }

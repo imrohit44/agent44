@@ -47,10 +47,10 @@ npm run build
 npm pack --dry-run
 ```
 
+The package identity is `@imrohit44/agent44-ts-client` at version `0.1.0`.
 For npm package metadata, install instructions, and consumer-facing examples,
-see the [TypeScript package README](../typescript/README.md). Its current
-pre-release version is `0.1.0`; registry publication and package-name
-availability have not been established.
+see the [TypeScript package README](../typescript/README.md). Publication and
+registry availability have not been established.
 
 The package is ESM-only. `npm run build` emits `dist/index.js` and
 `dist/index.d.ts`; the package manifest's `main`, `module`, `types`, and
@@ -115,10 +115,11 @@ used to claim interoperable provenance enforcement. See
 - `npm run typecheck` passes for the entry point, tests, and demo without
   emitting files.
 - `npm run build` passes and generates `dist/index.js`, `dist/index.d.ts`,
-  and a source map; all declared ESM package entry points exist.
-- `npm pack --dry-run` includes those distribution files, `package.json`, and
-  the Apache-2.0 `LICENSE`, not TypeScript sources, demos, tests, or the
-  lockfile.
+  and a source map; all declared ESM package entry points exist. The package
+  allowlist intentionally excludes the source map.
+- `npm pack --dry-run` includes `dist/index.js`, `dist/index.d.ts`,
+  `package.json`, `README.md`, and the Apache-2.0 `LICENSE`, not TypeScript
+  sources, demos, tests, the lockfile, or source maps.
 - A temporary consumer project successfully imported the package and
   instantiated the exported class/factory. This did not exercise a live
   `callTool()` exchange.

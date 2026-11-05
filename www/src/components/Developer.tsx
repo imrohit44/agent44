@@ -18,8 +18,8 @@ const Developer = () => {
           <div>
             <h3 className="text-2xl font-bold mb-6">TypeScript Client Installation</h3>
             <ol className="space-y-3 text-muted-foreground text-sm">
-              <li>npm install agent44-ts-client — Install the TypeScript client (package currently implemented, build/typecheck/package archive verification pending)</li>
-              <li><code>import {"{ createAgent44ProxyClient }"} from &apos;agent44-ts-client&apos;</code></li>
+              <li>After publication, run npm install @imrohit44/agent44-ts-client (local package checks pass; live MCP integration is unverified)</li>
+              <li><code>import {"{ createAgent44ProxyClient }"} from &apos;@imrohit44/agent44-ts-client&apos;</code></li>
               <li>Initialize with stdio transport: <code>createAgent44ProxyClient(&apos;agent44-proxy&apos;, stdin, stdout)</code></li>
               <li>Call tools with optional provenance: <code>client.callTool(&apos;toolName&apos;, {"{ /* args */ }"}, provenanceRef)</code></li>
             </ol>
@@ -33,7 +33,7 @@ const Developer = () => {
             </a>
           </p>
           <p className="mt-2 text-sm text-muted-foreground">
-            The TypeScript package is currently implemented but build/typecheck/package archive validation remains unverified. Do not claim published npm availability.
+            Local package tests, typecheck, build, and archive checks pass. Live MCP integration and npm publication are unverified.
           </p>
         </div>
       </div>
