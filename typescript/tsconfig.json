@@ -10,8 +10,7 @@
     "outDir": "./dist",
     "rootDir": "./client",
     "resolveJsonModule": true,
-    "declaration": true,
-    "sourceMap": true
+    "declaration": true
   },
   "include": [
     "./client/index.ts"

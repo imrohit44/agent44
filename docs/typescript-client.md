@@ -47,6 +47,11 @@ npm run build
 npm pack --dry-run
 ```
 
+For npm package metadata, install instructions, and consumer-facing examples,
+see the [TypeScript package README](../typescript/README.md). Its current
+pre-release version is `0.1.0`; registry publication and package-name
+availability have not been established.
+
 The package is ESM-only. `npm run build` emits `dist/index.js` and
 `dist/index.d.ts`; the package manifest's `main`, `module`, `types`, and
 `exports` fields point to those generated files. The build configuration
@@ -58,7 +63,7 @@ they do not launch a live MCP proxy.
 
 No evidence in the repository establishes npm publication. The package
 manifest's version and `exports` fields describe local package metadata, not
-publication. The package metadata and included `LICENSE` now identify this
+publication. The package metadata and included `LICENSE` identify this
 package as Apache-2.0, matching the repository license.
 
 ## Tool-call API shape

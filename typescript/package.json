@@ -1,13 +1,24 @@
 {
   "name": "agent44-ts-client",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/imrohit44/Agent44.git",
+    "directory": "typescript"
+  },
+  "homepage": "https://github.com/imrohit44/Agent44",
+  "bugs": {
+    "url": "https://github.com/imrohit44/Agent44/issues"
+  },
   "main": "dist/index.js",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
-    "dist",
-    "LICENSE"
+    "README.md",
+    "LICENSE",
+    "dist/index.js",
+    "dist/index.d.ts"
   ],
   "description": "TypeScript client for Agent44 MCP proxy with provenance propagation",
   "keywords": [
@@ -19,6 +30,9 @@
   ],
   "author": "Agent44 Team",
   "license": "Apache-2.0",
+  "engines": {
+    "node": ">=18"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
