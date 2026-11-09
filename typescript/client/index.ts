@@ -143,7 +143,7 @@ export class Agent44ProxyClient {
   private transportClose: Promise<void> | undefined;
   private closeOperation: Promise<void> | undefined;
   private connectAbortController: AbortController | undefined;
-  private connectionAbortKind: 'timeout' | 'cancelled' | 'closed' | undefined;
+  private connectionAbortKind: 'timeout' | 'closed' | undefined;
   private connectionAbortReason: unknown;
   private connectionAbortListener: (() => void) | undefined;
   private terminalError: Agent44ClientError | undefined;
@@ -236,13 +236,6 @@ export class Agent44ProxyClient {
     this.connectAbortController = controller;
     const timeoutMs = this.connectionTimeoutMs;
 
-    const abortConnection = () => {
-      this.connectionAbortKind = 'cancelled';
-      this.connectionAbortReason = options.signal?.reason;
-      controller.abort(options.signal?.reason);
-    };
-    options.signal?.addEventListener('abort', abortConnection, { once: true });
-
     const timeoutId = setTimeout(() => {
       this.connectionAbortKind = 'timeout';
       this.connectionAbortReason = new Error(
@@ -264,6 +257,9 @@ export class Agent44ProxyClient {
       })
       .then(() => {
         if (controller.signal.aborted || this.stateValue !== 'CONNECTING') {
+          if (this.terminalError) {
+            throw this.terminalError;
+          }
           throw this.connectionAbortError();
         }
         this.stateValue = 'CONNECTED';
@@ -275,6 +271,9 @@ export class Agent44ProxyClient {
         if (this.stateValue !== 'CLOSING' && this.stateValue !== 'CLOSED') {
           this.stateValue = 'FAILED';
           this.terminalError = connectionError;
+        }
+        if (this.stateValue === 'CLOSING' || this.stateValue === 'CLOSED') {
+          throw connectionError;
         }
         try {
           await this.closeTransport();
@@ -301,11 +300,10 @@ export class Agent44ProxyClient {
           );
           this.connectionAbortListener = undefined;
         }
-        options.signal?.removeEventListener('abort', abortConnection);
         this.connectAbortController = undefined;
       });
 
-    return this.connection;
+    return this.waitForConnection(this.connection, options.signal);
   }
 
   async listTools(options: RequestOptions = {}): Promise<Tool[]> {
@@ -431,7 +429,7 @@ export class Agent44ProxyClient {
       this.connectAbortController.abort(this.connectionAbortReason);
     }
 
-    this.closeOperation = (async () => {
+    const operation = (async () => {
       if (this.connection) {
         await this.connection.catch(() => undefined);
       }
@@ -450,7 +448,14 @@ export class Agent44ProxyClient {
       }
     })();
 
-    return this.closeOperation;
+    this.closeOperation = operation;
+    void operation.catch(() => {
+      if (this.closeOperation === operation) {
+        this.closeOperation = undefined;
+      }
+    });
+
+    return operation;
   }
 
   private async ensureConnected(signal?: AbortSignal): Promise<void> {
@@ -581,8 +586,27 @@ export class Agent44ProxyClient {
   }
 
   private async closeTransport(): Promise<void> {
-    this.transportClose ??= this.client.close();
-    return this.transportClose;
+    // Single-flight: if close is already in progress, wait for it to complete.
+    // This prevents duplicate transport close calls while ensuring that a
+    // subsequently called close() can retry after a failure (the cached
+    // promise is cleared on completion or after a rejection).
+    if (this.transportClose) {
+      return this.transportClose;
+    }
+
+    try {
+      this.transportClose = this.client.close();
+      await this.transportClose;
+      // Clear after successful completion so future close() calls can
+      // proceed (idempotent transport close is safe to retry).
+      this.transportClose = undefined;
+      return;
+    } catch (error) {
+      // Clear so that a future close() attempt can proceed (retry policy).
+      // The original error is preserved via Agent44ClientError.cause.
+      this.transportClose = undefined;
+      throw error;
+    }
   }
 
   private getState(): Agent44ClientState {
@@ -618,9 +642,6 @@ export class Agent44ProxyClient {
       return this.clientClosedError('connect', error);
     }
     if (this.connectionAbortKind === 'timeout') {
-      return this.connectionAbortError();
-    }
-    if (this.connectionAbortKind === 'cancelled') {
       return this.connectionAbortError();
     }
     if (isRequestTimeout(error)) {

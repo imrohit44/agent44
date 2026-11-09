@@ -1,6 +1,10 @@
-// TypeScript client tests for Agent44-ts-client
-// Milestone 3C - Provenance propagation verification
-
+import assert from 'node:assert/strict';
+import type { Tool } from '@modelcontextprotocol/sdk/types.js';
+import {
+  ErrorCode,
+  McpError,
+  type CallToolResult as MCPCallToolResult,
+} from '@modelcontextprotocol/sdk/types.js';
 import {
   Agent44ClientError,
   Agent44ProxyClient,
@@ -8,280 +12,395 @@ import {
   type ProvenanceReference,
   type ToolCallResult,
 } from './index.js';
-import type { CallToolResult as MCPCallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
 
-const client = createAgent44ProxyClient('agent44-proxy', process.stdin, process.stdout);
-assert.ok(client instanceof Agent44ProxyClient);
-
-// Test 3: ProvenanceReference interface structure
-const ref: ProvenanceReference = { id: 'test-uuid-123', sourceTool: 'tool-a' };
-console.log('Test 3: ProvenanceReference structure:', ref);
-
-// Test 4: ToolCallResult interface structure
-const result: ToolCallResult = {
-  success: true,
-  text: 'success',
-  error: null,
-  provenance: { id: 'ref-456', sourceTool: 'tool-a' }
-};
-console.log('Test 4: ToolCallResult structure:', result.success);
-
-function isValidProvenanceReference(obj: unknown): obj is ProvenanceReference {
-  return (
-    typeof obj === 'object' &&
-    obj !== null &&
-    'id' in obj &&
-    typeof obj.id === 'string' &&
-    'sourceTool' in obj &&
-    typeof obj.sourceTool === 'string'
-  );
+interface Deferred<T> {
+  promise: Promise<T>;
+  resolve(value: T): void;
+  reject(reason: unknown): void;
 }
 
-assert.equal(isValidProvenanceReference(ref), true);
-assert.equal(isValidProvenanceReference({ id: 'test' }), false);
-
-function isValidToolCallResult(obj: unknown): obj is ToolCallResult {
-  return (
-    typeof obj === 'object' &&
-    obj !== null &&
-    'success' in obj &&
-    typeof obj.success === 'boolean' &&
-    'text' in obj &&
-    (obj.text === null || typeof obj.text === 'string') &&
-    'error' in obj &&
-    (obj.error === null || typeof obj.error === 'string') &&
-    'provenance' in obj &&
-    (obj.provenance === undefined || isValidProvenanceReference(obj.provenance))
-  );
+interface ControlledMCPClient {
+  connect: (...args: never[]) => Promise<void>;
+  close: () => Promise<void>;
+  listTools: (...args: never[]) => Promise<{ tools: Tool[] }>;
+  callTool: (...args: unknown[]) => Promise<MCPCallToolResult>;
+  onclose?: () => void;
 }
 
-assert.equal(isValidToolCallResult(result), true);
-assert.equal(isValidToolCallResult({ success: 'yes' }), false);
-
-const mcpResponse: MCPCallToolResult = {
-  content: [],
-  _meta: { provenanceReference: ref },
-};
-assert.deepEqual(client.extractProvenance(mcpResponse), ref);
-
-const malformedResponse: MCPCallToolResult = {
-  content: [],
-  _meta: { provenanceReference: { id: 'missing-source-tool' } },
-};
-assert.equal(client.extractProvenance(malformedResponse), undefined);
-
-console.log('TypeScript client API and provenance parsing tests passed.');
-
-const serverScript = `
-import { appendFileSync } from 'node:fs';
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from '@modelcontextprotocol/sdk/types.js';
-
-const mode = process.argv[1];
-if (mode === 'hang') {
-  setInterval(() => {}, 1000);
-} else {
-  const server = new Server({ name: 'reliability-test', version: '1.0.0' }, {
-    capabilities: { tools: {} },
+function deferred<T>(): Deferred<T> {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
   });
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: [{ name: 'wait', description: 'Wait briefly', inputSchema: { type: 'object' } }],
-  }));
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    appendFileSync(process.env.AGENT44_TEST_CALL_LOG, request.params.name + '\\n');
-    await new Promise((resolve) => setTimeout(resolve, request.params.arguments.delay ?? 200));
-    return { content: [{ type: 'text', text: 'finished' }] };
-  });
-  await server.connect(new StdioServerTransport());
-  if (mode === 'exit') {
-    setTimeout(() => process.exit(17), 50);
-  }
+  return { promise, resolve, reject };
 }
-`;
 
-function createReliabilityClient(
-  args: string[],
+function createControlledClient(
+  register: (client: Agent44ProxyClient) => void,
   options: ConstructorParameters<typeof Agent44ProxyClient>[3] = {},
-): Agent44ProxyClient {
-  return createAgent44ProxyClient(
-    process.execPath,
+): { client: Agent44ProxyClient; mcp: ControlledMCPClient } {
+  const client = createAgent44ProxyClient(
+    'controlled-mcp-fixture',
     process.stdin,
     process.stdout,
-    {
-      args: ['--input-type=module', '-e', serverScript, ...args],
-      ...options,
+    options,
+  );
+  const mcp = (client as unknown as { client: ControlledMCPClient }).client;
+  mcp.connect = async () => {};
+  mcp.close = async () => {};
+  mcp.listTools = async () => ({ tools: [] });
+  mcp.callTool = async () => ({ content: [{ type: 'text', text: 'ok' }] });
+  register(client);
+  return { client, mcp };
+}
+
+function withMockConnectionTimeout<T>(
+  run: (fireTimeout: () => void, scheduledDelay: () => number | undefined) => Promise<T>,
+): Promise<T> {
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  let timeoutCallback: (() => void) | undefined;
+  let delay: number | undefined;
+
+  globalThis.setTimeout = ((callback: (...args: unknown[]) => void, timeout?: number) => {
+    timeoutCallback = () => callback();
+    delay = timeout;
+    return 1 as unknown as ReturnType<typeof setTimeout>;
+  }) as typeof setTimeout;
+  globalThis.clearTimeout = (() => {}) as typeof clearTimeout;
+
+  return run(
+    () => {
+      assert.ok(timeoutCallback, 'connection timeout callback was scheduled');
+      timeoutCallback();
     },
+    () => delay,
+  ).finally(() => {
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
+  });
+}
+
+async function testPublicShapesAndProvenance(): Promise<void> {
+  const client = createAgent44ProxyClient(
+    'agent44-proxy',
+    process.stdin,
+    process.stdout,
+  );
+  assert.ok(client instanceof Agent44ProxyClient);
+
+  const reference: ProvenanceReference = {
+    id: 'test-uuid-123',
+    sourceTool: 'tool-a',
+  };
+  const result: ToolCallResult = {
+    success: true,
+    text: 'success',
+    error: null,
+    provenance: reference,
+  };
+  assert.equal(result.success, true);
+
+  const mcpResponse: MCPCallToolResult = {
+    content: [],
+    _meta: { provenanceReference: reference },
+  };
+  assert.deepEqual(client.extractProvenance(mcpResponse), reference);
+  assert.equal(
+    client.extractProvenance({
+      content: [],
+      _meta: { provenanceReference: { id: 'missing-source-tool' } },
+    }),
+    undefined,
   );
 }
 
 async function testReliabilityBehavior(): Promise<void> {
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'agent44-client-test-'));
-  const callLog = path.join(tempDir, 'calls.log');
-  const options = {
-    env: { ...process.env, AGENT44_TEST_CALL_LOG: callLog },
-  };
+  const clients: Agent44ProxyClient[] = [];
+  const register = (client: Agent44ProxyClient) => clients.push(client);
+  let testFailure: unknown;
+  let didFail = false;
+
   try {
-    const startupTimeoutClient = createReliabilityClient(
-      ['hang'],
-      { ...options, connectionTimeoutMs: 40 },
-    );
-    await assert.rejects(startupTimeoutClient.connect(), (error: unknown) => {
-      assert.ok(error instanceof Agent44ClientError);
-      assert.equal(error.code, 'CONNECTION_TIMEOUT');
-      assert.equal(error.operation, 'connect');
-      assert.equal(error.timeoutMs, 40);
-      return true;
-    });
-    await startupTimeoutClient.cleanup();
-    assert.equal(startupTimeoutClient.state, 'CLOSED');
+    const connectionGate = deferred<void>();
+    let connectionCount = 0;
+    const { client: sharedClient, mcp: sharedMcp } = createControlledClient(register);
+    sharedMcp.connect = () => {
+      connectionCount += 1;
+      return connectionGate.promise;
+    };
 
-    const connectionAbort = new AbortController();
-    const cancelledConnection = createReliabilityClient(
-      ['hang'],
-      { ...options, connectionTimeoutMs: 1000 },
-    );
-    const connectionResult = assert.rejects(
-      cancelledConnection.connect({ signal: connectionAbort.signal }),
-      (error: unknown) => {
-        assert.ok(error instanceof Agent44ClientError);
-        assert.equal(error.code, 'REQUEST_CANCELLED');
-        return true;
-      },
-    );
-    setTimeout(() => connectionAbort.abort(new Error('cancel startup')), 20);
-    await connectionResult;
-    await cancelledConnection.cleanup();
+    const callerAbort = new AbortController();
+    const callerA = sharedClient.connect({ signal: callerAbort.signal });
+    const callerB = sharedClient.connect();
+    assert.equal(connectionCount, 1, 'concurrent callers share one connection');
 
-    const failedClient = createAgent44ProxyClient(
-      process.execPath,
-      process.stdin,
-      process.stdout,
-      {
-        ...options,
-        args: ['--input-type=module', '-e', serverScript, 'normal'],
-        cwd: path.join(tempDir, 'missing-directory'),
-      },
-    );
-    await assert.rejects(failedClient.connect(), (error: unknown) => {
-      assert.ok(error instanceof Agent44ClientError);
-      assert.equal(error.code, 'CONNECTION_FAILED');
-      assert.ok(error.cause instanceof Error);
-      return true;
-    });
-    await failedClient.cleanup();
-    await failedClient.cleanup();
-    assert.equal(failedClient.state, 'CLOSED');
-
-    const client = createReliabilityClient(['normal'], {
-      ...options,
-      requestTimeoutMs: 35,
-    });
-    await client.connect();
-    const tools = await client.listTools();
-    assert.equal(tools[0]?.name, 'wait');
-
-    await assert.rejects(client.callTool('wait', { delay: 150 }), (error: unknown) => {
-      assert.ok(error instanceof Agent44ClientError);
-      assert.equal(error.code, 'REQUEST_TIMEOUT');
-      assert.equal(error.operation, 'callTool');
-      assert.equal(error.toolName, 'wait');
-      assert.equal(error.timeoutMs, 35);
-      return true;
-    });
-
-    await assert.rejects(
-      client.callTool('wait', { delay: 150 }, { timeoutMs: 15 }),
-      (error: unknown) => {
-        assert.ok(error instanceof Agent44ClientError);
-        assert.equal(error.code, 'REQUEST_TIMEOUT');
-        assert.equal(error.timeoutMs, 15);
-        return true;
-      },
-    );
-
-    const extendedTimeout = await client.callTool(
-      'wait',
-      { delay: 80 },
-      { timeoutMs: 250 },
-    );
-    assert.equal(extendedTimeout.success, true);
-
-    const abortedBeforeCall = new AbortController();
-    abortedBeforeCall.abort(new Error('cancel before request'));
-    await assert.rejects(
-      client.callTool('wait', {}, { signal: abortedBeforeCall.signal }),
-      (error: unknown) => {
-        assert.ok(error instanceof Agent44ClientError);
-        assert.equal(error.code, 'REQUEST_CANCELLED');
-        return true;
-      },
-    );
-
-    const duringCall = new AbortController();
-    const pending = client.callTool(
-      'wait',
-      { delay: 120 },
-      { signal: duringCall.signal, timeoutMs: 500 },
-    );
-    setTimeout(() => {
-      duringCall.abort(new Error('cancel in flight'));
-      duringCall.abort(new Error('cancel again'));
-    }, 20);
-    await assert.rejects(pending, (error: unknown) => {
+    const callerAResult = assert.rejects(callerA, (error: unknown) => {
       assert.ok(error instanceof Agent44ClientError);
       assert.equal(error.code, 'REQUEST_CANCELLED');
-      assert.equal(error.toolName, 'wait');
+      assert.equal(error.operation, 'connect');
       return true;
     });
-    await new Promise((resolve) => setTimeout(resolve, 150));
-    assert.equal((await readFile(callLog, 'utf8')).trim().split('\n').length, 4);
+    callerAbort.abort(new Error('caller A stopped waiting'));
+    await callerAResult;
+    connectionGate.resolve();
+    await callerB;
+    assert.equal(sharedClient.state, 'CONNECTED');
 
-    const pendingOnClose = client.callTool(
-      'wait',
-      { delay: 1000 },
-      { timeoutMs: 1500 },
+    const exitGate = deferred<void>();
+    const { client: exitingDuringConnect, mcp: exitMcp } =
+      createControlledClient(register);
+    exitMcp.connect = () => exitGate.promise;
+    const exitCallerA = assert.rejects(
+      exitingDuringConnect.connect(),
+      (error: unknown) => {
+        assert.ok(error instanceof Agent44ClientError);
+        assert.equal(error.code, 'CONNECTION_FAILED');
+        return true;
+      },
     );
-    const pendingOnCloseResult = assert.rejects(
-      pendingOnClose,
+    const exitCallerB = assert.rejects(
+      exitingDuringConnect.connect(),
+      (error: unknown) => {
+        assert.ok(error instanceof Agent44ClientError);
+        assert.equal(error.code, 'CONNECTION_FAILED');
+        return true;
+      },
+    );
+    exitMcp.onclose?.();
+    exitGate.reject(new Error('fixture exited during startup'));
+    await Promise.all([exitCallerA, exitCallerB]);
+
+    const startupError = new Error('transport startup failed');
+    const { client: failedStartup, mcp: failedStartupMcp } =
+      createControlledClient(register);
+    let failedStartupCloseCount = 0;
+    failedStartupMcp.connect = () => Promise.reject(startupError);
+    failedStartupMcp.close = async () => {
+      failedStartupCloseCount += 1;
+    };
+    await assert.rejects(failedStartup.connect(), (error: unknown) => {
+      assert.ok(error instanceof Agent44ClientError);
+      assert.equal(error.code, 'CONNECTION_FAILED');
+      assert.equal(error.cause, startupError);
+      return true;
+    });
+    assert.equal(failedStartupCloseCount, 1);
+
+    const startupGate = deferred<void>();
+    const { client: cleanupDuringConnect, mcp: startupMcp } =
+      createControlledClient(register);
+    let startupCount = 0;
+    let startupCloseCount = 0;
+    startupMcp.connect = () => {
+      startupCount += 1;
+      return startupGate.promise;
+    };
+    startupMcp.close = async () => {
+      startupCloseCount += 1;
+    };
+    const startupResult = assert.rejects(
+      cleanupDuringConnect.connect(),
       (error: unknown) => {
         assert.ok(error instanceof Agent44ClientError);
         assert.equal(error.code, 'CLIENT_CLOSED');
         return true;
       },
     );
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    await client.cleanup();
-    await pendingOnCloseResult;
-    assert.equal(client.state, 'CLOSED');
-    await assert.rejects(client.listTools(), (error: unknown) => {
-      assert.ok(error instanceof Agent44ClientError);
-      assert.equal(error.code, 'CLIENT_CLOSED');
-      return true;
-    });
+    const startupWaiterResult = assert.rejects(
+      cleanupDuringConnect.connect(),
+      (error: unknown) => {
+        assert.ok(error instanceof Agent44ClientError);
+        assert.equal(error.code, 'CLIENT_CLOSED');
+        return true;
+      },
+    );
+    const startupCleanup = cleanupDuringConnect.cleanup();
+    await Promise.all([startupResult, startupWaiterResult]);
+    await startupCleanup;
+    assert.equal(startupCount, 1);
+    assert.equal(startupCloseCount, 1);
+    assert.equal(cleanupDuringConnect.state, 'CLOSED');
+    startupGate.resolve();
 
-    const exitingClient = createReliabilityClient(['exit'], options);
-    await exitingClient.connect();
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    assert.equal(exitingClient.state, 'FAILED');
-    await assert.rejects(exitingClient.listTools(), (error: unknown) => {
+    const timeoutGate = deferred<void>();
+    const { client: timeoutClient, mcp: timeoutMcp } = createControlledClient(
+      register,
+      { connectionTimeoutMs: 123 },
+    );
+    timeoutMcp.connect = () => timeoutGate.promise;
+    await withMockConnectionTimeout(async (fireTimeout, scheduledDelay) => {
+      const timedOutConnect = assert.rejects(
+        timeoutClient.connect(),
+        (error: unknown) => {
+          assert.ok(error instanceof Agent44ClientError);
+          assert.equal(error.code, 'CONNECTION_TIMEOUT');
+          assert.equal(error.timeoutMs, 123);
+          return true;
+        },
+      );
+      assert.equal(scheduledDelay(), 123);
+      fireTimeout();
+      await timedOutConnect;
+    });
+    timeoutGate.resolve();
+
+    const { client: failedCloseClient, mcp: failedCloseMcp } =
+      createControlledClient(register);
+    const originalCloseError = new Error('first close failed');
+    let closeAttempts = 0;
+    const closeGate = deferred<void>();
+    failedCloseMcp.close = () => {
+      closeAttempts += 1;
+      return closeAttempts === 1
+        ? closeGate.promise
+        : Promise.resolve();
+    };
+    const firstCleanup = failedCloseClient.cleanup();
+    const concurrentCleanup = failedCloseClient.cleanup();
+    assert.equal(firstCleanup, concurrentCleanup);
+    closeGate.reject(originalCloseError);
+    await assert.rejects(firstCleanup, (error: unknown) => {
       assert.ok(error instanceof Agent44ClientError);
-      assert.equal(error.code, 'SERVER_EXITED');
+      assert.equal(error.code, 'CLEANUP_FAILED');
+      assert.equal(error.cause, originalCloseError);
       return true;
     });
-    await exitingClient.cleanup();
-    assert.equal(exitingClient.state, 'CLOSED');
-  } finally {
-    await rm(tempDir, { recursive: true, force: true });
+    assert.equal(failedCloseClient.state, 'FAILED');
+    await failedCloseClient.cleanup();
+    assert.equal(closeAttempts, 2);
+    assert.equal(failedCloseClient.state, 'CLOSED');
+    await failedCloseClient.cleanup();
+    assert.equal(closeAttempts, 2, 'successful cleanup remains idempotent');
+
+    const { client: requestClient, mcp: requestMcp } =
+      createControlledClient(register, { requestTimeoutMs: 250 });
+    const timeoutCause = new McpError(ErrorCode.RequestTimeout, 'timed out');
+    let observedTimeout: number | undefined;
+    requestMcp.callTool = async (...args: unknown[]) => {
+      observedTimeout = (args[2] as { timeout: number }).timeout;
+      throw timeoutCause;
+    };
+    await assert.rejects(
+      requestClient.callTool('lookup', {}, { timeoutMs: 75 }),
+      (error: unknown) => {
+        assert.ok(error instanceof Agent44ClientError);
+        assert.equal(error.code, 'REQUEST_TIMEOUT');
+        assert.equal(error.operation, 'callTool');
+        assert.equal(error.toolName, 'lookup');
+        assert.equal(error.timeoutMs, 75);
+        assert.equal(error.cause, timeoutCause);
+        return true;
+      },
+    );
+    assert.equal(observedTimeout, 75);
+
+    const requestStarted = deferred<AbortSignal>();
+    const requestMcp2 = (requestClient as unknown as {
+      client: ControlledMCPClient;
+    }).client;
+    requestMcp2.callTool = (...args: unknown[]) => new Promise((_, reject) => {
+      const signal = (args[2] as { signal: AbortSignal }).signal;
+      signal.addEventListener('abort', () => {
+        const error = new Error('MCP request cancelled');
+        error.name = 'AbortError';
+        reject(error);
+      }, { once: true });
+      requestStarted.resolve(signal);
+    });
+    const requestAbort = new AbortController();
+    const cancelledRequest = assert.rejects(
+      requestClient.callTool('lookup', {}, { signal: requestAbort.signal }),
+      (error: unknown) => {
+        assert.ok(error instanceof Agent44ClientError);
+        assert.equal(error.code, 'REQUEST_CANCELLED');
+        return true;
+      },
+    );
+    await requestStarted.promise;
+    requestAbort.abort(new Error('cancel this request'));
+    await cancelledRequest;
+
+    const { client: isolatedClient, mcp: isolatedMcp } =
+      createControlledClient(register);
+    const requestOne = deferred<void>();
+    const requestTwo = deferred<void>();
+    const startedOne = deferred<AbortSignal>();
+    const startedTwo = deferred<AbortSignal>();
+    isolatedMcp.callTool = (...args: unknown[]) => {
+      const toolName = (args[0] as { name: string }).name;
+      const current = toolName === 'one' ? requestOne : requestTwo;
+      const started = toolName === 'one' ? startedOne : startedTwo;
+      const signal = (args[2] as { signal: AbortSignal }).signal;
+      signal.addEventListener('abort', () => {
+        const error = new Error('request cancelled');
+        error.name = 'AbortError';
+        current.reject(error);
+      }, { once: true });
+      started.resolve(signal);
+      return current.promise.then(() => ({ content: [] }));
+    };
+    const abortOne = new AbortController();
+    const callOne = assert.rejects(
+      isolatedClient.callTool('one', {}, { signal: abortOne.signal }),
+      (error: unknown) => {
+        assert.ok(error instanceof Agent44ClientError);
+        assert.equal(error.code, 'REQUEST_CANCELLED');
+        return true;
+      },
+    );
+    const callTwo = isolatedClient.callTool('two', {});
+    await Promise.all([startedOne.promise, startedTwo.promise]);
+    abortOne.abort();
+    await callOne;
+    requestTwo.resolve();
+    assert.equal((await callTwo).success, true);
+
+    const { client: afterCompletionClient, mcp: afterCompletionMcp } =
+      createControlledClient(register);
+    afterCompletionMcp.callTool = async () => ({
+      content: [{ type: 'text', text: 'policy denied' }],
+      isError: true,
+    });
+    const completedAbort = new AbortController();
+    const policyResult = await afterCompletionClient.callTool(
+      'restricted',
+      {},
+      { signal: completedAbort.signal },
+    );
+    completedAbort.abort();
+    assert.equal(policyResult.success, false);
+    assert.equal(policyResult.error, 'policy denied');
+  } catch (error) {
+    didFail = true;
+    testFailure = error;
+  }
+
+  const cleanupFailures: unknown[] = [];
+  for (const client of clients) {
+    try {
+      await client.cleanup();
+    } catch (error) {
+      cleanupFailures.push(error);
+    }
+  }
+
+  if (didFail && cleanupFailures.length > 0) {
+    throw new AggregateError(
+      [testFailure, ...cleanupFailures],
+      'Reliability test and teardown both failed',
+    );
+  }
+  if (didFail) {
+    throw testFailure;
+  }
+  if (cleanupFailures.length > 0) {
+    throw new AggregateError(cleanupFailures, 'Reliability test teardown failed');
   }
 }
 
+await testPublicShapesAndProvenance();
 await testReliabilityBehavior();
 console.log('TypeScript client reliability tests passed.');

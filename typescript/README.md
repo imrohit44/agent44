@@ -1,14 +1,15 @@
 # Agent44 TypeScript Client
 
 The Agent44 TypeScript Client is an experimental ESM wrapper around the
-Model Context Protocol (MCP) client SDK. Version `0.2.0` adds
-stdio MCP connection, session initialization, tool discovery, tool calls, and
-child-process cleanup. It also carries a `provenanceReference` through MCP
-`_meta`.
+Model Context Protocol (MCP) client SDK. Version `0.2.0` added stdio MCP
+connection, session initialization, tool discovery, tool calls, and transport
+cleanup. Version `0.3.0` adds configurable timeouts, cancellation, and
+improved lifecycle and error handling. It also carries a `provenanceReference`
+through MCP `_meta`.
 
-**Release status:** `0.2.0` is published. It includes the stdio transport
-integration described below; `0.1.0` predates that functionality. The API
-remains experimental and is not a stable SDK contract.
+**Release status:** `0.2.0` is published. The `0.3.0` release candidate is
+prepared in this repository but has not been published. The API remains
+experimental and is not a stable SDK contract.
 
 The Python proxy forwards a well-formed `provenanceReference` metadata object
 to the downstream MCP server and preserves downstream response metadata. It
@@ -31,6 +32,8 @@ npm install @imrohit44/agent44-ts-client@0.2.0
 
 See the [npm package](https://www.npmjs.com/package/@imrohit44/agent44-ts-client)
 and [GitHub v0.2.0 release](https://github.com/imrohit44/Agent44/releases/tag/v0.2.0).
+After the `0.3.0` release is published, install it with
+`npm install @imrohit44/agent44-ts-client@0.3.0`.
 
 ## Exports and API
 
@@ -99,7 +102,7 @@ SDK opens child-process stdin/stdout itself. The retained `stdin` and `stdout`
 parameters are accepted for compatibility and are not used by the transport.
 `connect()` performs MCP initialization, `listTools()` discovers tools, and
 `callTool()` also connects automatically if needed. Always call `cleanup()` to
-close the child process.
+request transport shutdown.
 
 `extractProvenance()` can parse a reference from an MCP response `_meta`:
 
@@ -159,8 +162,21 @@ MCP request that rejected rather than returning a tool result.
 The public `state` is one of `DISCONNECTED`, `CONNECTING`, `CONNECTED`,
 `CLOSING`, `CLOSED`, or `FAILED`. `cleanup()` is idempotent, rejects pending
 requests with `CLIENT_CLOSED`, and permanently closes the client; later
-operations reject instead of reconnecting. Always await cleanup in a `finally`
-block.
+operations reject instead of reconnecting. Concurrent cleanup calls share the
+same operation. If transport cleanup fails, the client remains `FAILED`,
+`cleanup()` rejects with `CLEANUP_FAILED` and the original cause, and a later
+cleanup call can retry. Always await cleanup in a `finally` block.
+
+**Process shutdown:** `cleanup()` delegates transport shutdown to the underlying
+MCP SDK's `close()` method. For stdio transports, process termination is
+best-effort; successful cleanup does not independently guarantee that the
+child process has exited. Applications requiring strict process-exit
+confirmation should monitor the child process separately.
+
+When multiple callers share connection startup, a caller's `AbortSignal` only
+cancels that caller's wait; it does not cancel the shared startup. The
+connection timeout applies to the shared attempt, and `cleanup()` cancels it
+for all waiting callers.
 
 An abort signal cancels the client-side MCP request and sends the protocol
 cancellation notification where supported. It does **not** guarantee that the
@@ -168,8 +184,8 @@ downstream tool has stopped executing; that depends on the server and tool.
 The same limitation applies to timeouts. Avoid automatic retries where
 re-execution could have side effects.
 
-These reliability API additions are in the current repository source. The
-published `0.2.0` package is unchanged until a future release is published.
+These reliability API additions are prepared for `0.3.0` and are not present
+in the published `0.2.0` package.
 
 ## Verification status
 
