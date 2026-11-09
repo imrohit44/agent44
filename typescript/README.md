@@ -38,6 +38,9 @@ The package exports:
 
 - `Agent44ProxyClient`
 - `createAgent44ProxyClient`
+- `Agent44ClientError` and `Agent44ClientErrorCode`
+- `Agent44ClientState`
+- `Agent44ProxyClientOptions`, `ConnectOptions`, and `RequestOptions`
 - `ProvenanceReference`
 - `ToolCallResult`
 
@@ -63,13 +66,20 @@ const client = createAgent44ProxyClient(
       'python', '-m', 'agent44.demo_server',
     ],
     cwd: process.cwd(),
+    connectionTimeoutMs: 10_000,
+    requestTimeoutMs: 30_000,
   } satisfies Agent44ProxyClientOptions,
 );
 
-await client.connect();
-const tools = await client.listTools();
-const result = await client.callTool('add', { a: 2, b: 3 });
-await client.cleanup();
+try {
+  await client.connect();
+  const tools = await client.listTools();
+  const result = await client.callTool('add', { a: 2, b: 3 }, {
+    timeoutMs: 5_000,
+  });
+} finally {
+  await client.cleanup();
+}
 
 const sameClient: Agent44ProxyClient = client;
 const reference: ProvenanceReference = {
@@ -108,6 +118,58 @@ const extracted = client.extractProvenance({
 The `callTool(toolName, args, provenance?)` method constructs an MCP tool-call
 request and, when provided, attaches the reference as
 `_meta.provenanceReference`.
+
+## Timeouts, cancellation, and lifecycle
+
+`connectionTimeoutMs` limits MCP startup and initialization (default: 30
+seconds). `requestTimeoutMs` sets the default for `listTools()` and
+`callTool()` requests (default: the MCP SDK's 60-second timeout). Supply
+`{ timeoutMs }` in request options to override the request default. Connection
+options accept `{ signal }`; request options accept both `{ signal, timeoutMs }`.
+
+The existing provenance argument remains supported:
+
+```ts
+const abortController = new AbortController();
+const result = await client.callTool(
+  'search',
+  { query: 'MCP' },
+  { id: 'ref-123', sourceTool: 'planner' },
+  { signal: abortController.signal, timeoutMs: 5_000 },
+);
+```
+
+For calls without provenance, pass request options as the third argument:
+
+```ts
+await client.callTool('search', { query: 'MCP' }, {
+  signal: abortController.signal,
+});
+```
+
+Timeouts and cancellations reject with `Agent44ClientError`, including a
+`code`, `operation`, optional `toolName`, `timeoutMs`, and original `cause`.
+Codes include `CONNECTION_FAILED`, `CONNECTION_TIMEOUT`, `REQUEST_TIMEOUT`,
+`REQUEST_CANCELLED`, `SERVER_EXITED`, `TOOL_ERROR`, `REQUEST_FAILED`,
+`CLIENT_CLOSED`, `INVALID_STATE`, and `CLEANUP_FAILED`. MCP tool results marked
+`isError` remain ordinary `{ success: false }` results, so an Agent44 policy
+denial is not recast as a connection failure. `REQUEST_FAILED` represents an
+MCP request that rejected rather than returning a tool result.
+
+The public `state` is one of `DISCONNECTED`, `CONNECTING`, `CONNECTED`,
+`CLOSING`, `CLOSED`, or `FAILED`. `cleanup()` is idempotent, rejects pending
+requests with `CLIENT_CLOSED`, and permanently closes the client; later
+operations reject instead of reconnecting. Always await cleanup in a `finally`
+block.
+
+An abort signal cancels the client-side MCP request and sends the protocol
+cancellation notification where supported. It does **not** guarantee that the
+downstream tool has stopped executing; that depends on the server and tool.
+The same limitation applies to timeouts. Avoid automatic retries where
+re-execution could have side effects.
+
+These reliability API additions are in the current repository source. The
+published `0.2.0` package is unchanged until a future release is published.
 
 ## Verification status
 
