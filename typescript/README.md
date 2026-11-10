@@ -7,9 +7,10 @@ cleanup. Version `0.3.0` adds configurable timeouts, cancellation, and
 improved lifecycle and error handling. It also carries a `provenanceReference`
 through MCP `_meta`.
 
-**Release status:** `0.2.0` is published. The `0.3.0` release candidate is
-prepared in this repository but has not been published. The API remains
-experimental and is not a stable SDK contract.
+**Release status:** `0.3.0` is published on npm; `0.2.0` is the preceding
+published release. This repository README and [changelog](CHANGELOG.md)
+describe the current package; the API remains experimental and is not a stable
+SDK contract.
 
 The Python proxy forwards a well-formed `provenanceReference` metadata object
 to the downstream MCP server and preserves downstream response metadata. It
@@ -24,15 +25,15 @@ not end-to-end provenance enforcement or safety.
 
 ## Installation
 
-Install the published package version:
+Install the current published package:
 
 ```sh
-npm install @imrohit44/agent44-ts-client@0.2.0
+npm install @imrohit44/agent44-ts-client
 ```
 
 See the [npm package](https://www.npmjs.com/package/@imrohit44/agent44-ts-client)
-and [GitHub v0.2.0 release](https://github.com/imrohit44/Agent44/releases/tag/v0.2.0).
-After the `0.3.0` release is published, install it with
+and [GitHub v0.3.0 release](https://github.com/imrohit44/Agent44/releases/tag/v0.3.0).
+To pin the current version, use
 `npm install @imrohit44/agent44-ts-client@0.3.0`.
 
 ## Exports and API
@@ -167,11 +168,11 @@ same operation. If transport cleanup fails, the client remains `FAILED`,
 `cleanup()` rejects with `CLEANUP_FAILED` and the original cause, and a later
 cleanup call can retry. Always await cleanup in a `finally` block.
 
-**Process shutdown:** `cleanup()` delegates transport shutdown to the underlying
-MCP SDK's `close()` method. For stdio transports, process termination is
-best-effort; successful cleanup does not independently guarantee that the
-child process has exited. Applications requiring strict process-exit
-confirmation should monitor the child process separately.
+**Process shutdown:** `close()` delegates transport shutdown to the underlying
+MCP SDK. For stdio transports, process termination is best-effort; successful
+cleanup does not independently guarantee that the child process has exited.
+Applications requiring strict process-exit confirmation should monitor the
+child process separately.
 
 When multiple callers share connection startup, a caller's `AbortSignal` only
 cancels that caller's wait; it does not cancel the shared startup. The
@@ -184,8 +185,8 @@ downstream tool has stopped executing; that depends on the server and tool.
 The same limitation applies to timeouts. Avoid automatic retries where
 re-execution could have side effects.
 
-These reliability API additions are prepared for `0.3.0` and are not present
-in the published `0.2.0` package.
+These reliability API additions are included in published `0.3.0`; published
+`0.2.0` remains available as the preceding release.
 
 ## Verification status
 
@@ -197,9 +198,15 @@ shutdown. It requires `uv` and the repository's Python dependencies; it is
 not run by the published package's `npm test`. This behavior was verified from
 the release source and published package tarball.
 
-The public npm `0.1.0` does not have this transport behavior. No end-to-end
+The public npm `0.1.0` predates the stdio transport behavior. No end-to-end
 provenance validation/lineage, delegation enforcement, remote MCP transport,
 or production safety behavior is established.
+
+## Release history
+
+- [v0.3.0 — TypeScript SDK reliability](https://github.com/imrohit44/Agent44/releases/tag/v0.3.0)
+- [v0.2.0 — MCP stdio transport integration](https://github.com/imrohit44/Agent44/releases/tag/v0.2.0)
+- See the [changelog](CHANGELOG.md) for the current release summary.
 
 ## License
 

@@ -21,21 +21,30 @@ const evidence = [
   },
   {
     subject: "MCP stdio integration",
-    result: "Verified for v0.2.0",
+    result: "Expanded for v0.3.0",
     scope:
-      "Local client → Python proxy → deterministic MCP fixture: initialization, discovery, tool calls, policy denial without downstream execution, metadata round-trip, unknown tool, and cleanup.",
-    source: "GitHub v0.2.0 release notes and TypeScript integration test.",
+      "Local client → Python proxy → deterministic MCP fixture: initialization, discovery, tool calls, policy denial without downstream execution, metadata round-trip, unknown tool, and cleanup. Separate deterministic tests exercise lifecycle and cancellation behavior.",
+    source: "TypeScript integration and reliability tests; published npm v0.3.0 package.",
     sourceHref:
-      "https://github.com/imrohit44/Agent44/releases/tag/v0.2.0",
+      "https://www.npmjs.com/package/@imrohit44/agent44-ts-client",
   },
   {
     subject: "TypeScript package",
-    result: "0.2.0 published",
+    result: "0.3.0 published",
     scope:
-      "Published ESM package with stdio MCP transport; this is a release fact, not an assurance level.",
-    source: "npm registry and GitHub release v0.2.0.",
+      "Published ESM package with stdio MCP transport, lifecycle states, timeout controls, and cancellation support; this is a release fact, not an assurance level.",
+    source: "npm registry; GitHub v0.3.0 release publication remains pending.",
     sourceHref:
       "https://www.npmjs.com/package/@imrohit44/agent44-ts-client",
+  },
+  {
+    subject: "Previous TypeScript package",
+    result: "0.2.0 historical",
+    scope:
+      "Preceding published release that introduced the MCP stdio transport integration.",
+    source: "GitHub release v0.2.0.",
+    sourceHref:
+      "https://github.com/imrohit44/Agent44/releases/tag/v0.2.0",
   },
 ];
 
@@ -58,7 +67,7 @@ const decisions = [
   {
     title: "Make process ownership and cleanup explicit.",
     text:
-      "The TypeScript client initializes an MCP stdio session, performs discovery and calls through that session, and exposes cleanup() to close the SDK client, transport, and child process.",
+      "The TypeScript client initializes an MCP stdio session, performs discovery and calls through that session, and exposes cleanup() to delegate transport shutdown to the MCP SDK. Stdio child-process termination is best-effort and is not independently confirmed.",
   },
 ];
 
@@ -335,8 +344,11 @@ export default function Engineering() {
           <a href="https://github.com/imrohit44/Agent44/blob/main/docs/provenance.md">
             Provenance guide <span aria-hidden="true">↗</span>
           </a>
-          <a href="https://github.com/imrohit44/Agent44/releases/tag/v0.2.0">
-            TypeScript v0.2.0 release <span aria-hidden="true">↗</span>
+          <a href="https://github.com/imrohit44/Agent44/releases/tag/v0.3.0">
+            TypeScript v0.3.0 release <span aria-hidden="true">↗</span>
+          </a>
+          <a href="https://github.com/imrohit44/Agent44/blob/main/typescript/CHANGELOG.md">
+            TypeScript changelog <span aria-hidden="true">↗</span>
           </a>
         </div>
       </Section>

@@ -125,6 +125,27 @@ const milestones = [
       },
     ],
   },
+  {
+    date: "2026-11-09",
+    category: "TYPESCRIPT SDK 0.3.0",
+    title: "Lifecycle reliability released on npm",
+    description:
+      "The npm registry records publication of v0.3.0 with caller-isolated connection cancellation, configurable timeouts, request cancellation, typed lifecycle errors, and retryable transport cleanup. Stdio child-process exit remains best-effort and is not independently confirmed.",
+    links: [
+      {
+        label: "npm v0.3.0 package",
+        href: "https://www.npmjs.com/package/@imrohit44/agent44-ts-client",
+      },
+      {
+        label: "v0.3.0 changelog",
+        href: "https://github.com/imrohit44/agent44/blob/main/typescript/CHANGELOG.md",
+      },
+      {
+        label: "GitHub v0.3.0 release",
+        href: "https://github.com/imrohit44/agent44/releases/tag/v0.3.0",
+      },
+    ],
+  },
 ];
 
 export default function Journey() {
@@ -139,8 +160,8 @@ export default function Journey() {
           />
           <p className="journey-date-note">
             Dates are shown as calendar dates. Commit dates come from Git
-            history; package dates from npm registry metadata; v0.2.0 release
-            publication from GitHub Releases.
+            history; package dates come from npm registry metadata; the v0.2.0
+            GitHub release publication date comes from GitHub Releases.
           </p>
         </div>
       </section>

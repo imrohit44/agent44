@@ -65,7 +65,7 @@ export const SITE_PAGES: SitePage[] = [
     path: "/releases",
     title: "Releases — Agent44",
     description:
-      "Release details for the published @imrohit44/agent44-ts-client package, including version 0.2.0.",
+      "Release details for the published @imrohit44/agent44-ts-client package, including the current v0.3.0 SDK.",
   },
   {
     path: "/engineering",

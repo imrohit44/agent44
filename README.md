@@ -14,6 +14,22 @@ decisions only for explicitly configured unresolved calls. It does not claim
 that a policy decision layer prevents every attack or secures an entire agent
 application.
 
+## Current release: TypeScript SDK v0.3.0
+
+The current published SDK is [`@imrohit44/agent44-ts-client@0.3.0`](https://www.npmjs.com/package/@imrohit44/agent44-ts-client),
+an ESM MCP stdio client for Node.js `>=18`. The package and repository use the
+Apache-2.0 license. Version 0.3.0 adds configurable timeouts, caller-isolated
+connection cancellation, request cancellation, lifecycle states, typed client
+errors, and retryable transport cleanup. Cancellation does not guarantee
+downstream tool termination, and stdio cleanup does not independently confirm
+child-process exit.
+
+- **Install:** `npm install @imrohit44/agent44-ts-client`
+- **Release notes:** [Agent44 TypeScript SDK v0.3.0](https://github.com/imrohit44/Agent44/releases/tag/v0.3.0)
+- **Changelog:** [TypeScript SDK release history](typescript/CHANGELOG.md)
+- **Project:** [GitHub](https://github.com/imrohit44/agent44) · [Website](https://agent44-nu.vercel.app/) · [TypeScript SDK guide](docs/typescript-client.md)
+- **History:** [v0.2.0 release](https://github.com/imrohit44/Agent44/releases/tag/v0.2.0) remains the historical stdio transport integration release.
+
 ## Repository layout
 
 ```text
@@ -112,13 +128,13 @@ status.
 - **Evaluation runner and synthetic corpus:** the runner replays scenarios and
   reports decision outcomes, per-category results, and adapter outcomes. Its
   measurements are scoped to individual synthetic tool-call scenarios.
-- **TypeScript client component:** the published `0.2.0` adds a
-  real stdio MCP client flow and passes a local integration test through the
-  Python proxy. Version `0.2.0` is published on
-  [npm](https://www.npmjs.com/package/@imrohit44/agent44-ts-client); install
-  it with `npm install @imrohit44/agent44-ts-client@0.2.0`. See
-  [TypeScript Client](docs/typescript-client.md) and the
-  [v0.2.0 GitHub release](https://github.com/imrohit44/Agent44/releases/tag/v0.2.0).
+- **TypeScript client component:** published SDK `0.3.0` provides MCP stdio
+  connection, discovery, tool calls, configurable timeouts, caller-isolated
+  connection cancellation, request cancellation, and typed lifecycle errors.
+  Its real stdio integration has been exercised through the Python proxy.
+  Install with `npm install @imrohit44/agent44-ts-client`; see the
+  [TypeScript Client guide](docs/typescript-client.md), [npm package](https://www.npmjs.com/package/@imrohit44/agent44-ts-client),
+  and [v0.3.0 GitHub release](https://github.com/imrohit44/Agent44/releases/tag/v0.3.0).
 
 ## Quickstart
 
@@ -219,6 +235,48 @@ asyncio.run(main())
 The demo server returns `5` for this call. `echo` is also allowed by the
 example policy; an unknown tool is denied by the default.
 
+### Use the TypeScript client
+
+The SDK package requires Node.js `>=18` and an ESM-enabled project. Install it
+with:
+
+```sh
+npm install @imrohit44/agent44-ts-client
+```
+
+From the repository root, the following minimal example launches the Python
+proxy and its demo server through stdio:
+
+```js
+import { createAgent44ProxyClient } from "@imrohit44/agent44-ts-client";
+
+const client = createAgent44ProxyClient(
+  "python",
+  process.stdin,
+  process.stdout,
+  {
+    args: [
+      "-m", "agent44.proxy",
+      "--policy", "evaluation/demo.yaml",
+      "--",
+      "python", "-m", "agent44.demo_server",
+    ],
+    cwd: process.cwd(),
+  },
+);
+
+try {
+  await client.connect();
+  const result = await client.callTool("add", { a: 2, b: 3 });
+  console.log(result.text);
+} finally {
+  await client.cleanup();
+}
+```
+
+See the [SDK guide](docs/typescript-client.md) for timeouts, cancellation,
+structured errors, and shutdown limitations.
+
 ## Evaluation
 
 The checked-in corpus is hand-authored and synthetic. The main development
@@ -251,22 +309,22 @@ for definitions and limits.
 - **Python:** the policy engine, proxy, evaluation runner, and provenance data
   model are implemented in the repository. Python test coverage exists; use the
   development guide for commands and current verification notes.
-- **TypeScript client:** its source now passes the typecheck and builds an
-  ESM package with generated `dist/index.js` and `dist/index.d.ts` exports.
-  The checked-out source passes a real stdio MCP integration test through the
-  Python proxy, covering tool discovery/calls, policy denial with a downstream
-  execution-count assertion, and provenance metadata round-trip. The published
-  npm `0.2.0` includes this transport integration. Metadata transport does not
-  validate provenance or establish end-to-end enforcement; see
+- **TypeScript client:** published `@imrohit44/agent44-ts-client@0.3.0`
+  provides the ESM client and reliability features described above. Source
+  tests, typecheck, build, and the real stdio integration test pass in the
+  current checkout. Provenance metadata transport does not validate
+  provenance or establish end-to-end enforcement; see
   [TypeScript Client](docs/typescript-client.md).
-- **Website:** a private Vite/React source project exists under `www/`. Its
-  current production build does not pass because the package's build script
-  invokes `tsc` without a project configuration in that directory. Deployment
-  is not verified.
-- **Publication:** `@imrohit44/agent44-ts-client@0.2.0` is publicly published.
-  The TypeScript package license is Apache-2.0, matching the repository
-  license. See the [npm package](https://www.npmjs.com/package/@imrohit44/agent44-ts-client)
-  and [GitHub v0.2.0 release](https://github.com/imrohit44/Agent44/releases/tag/v0.2.0).
+- **Website:** the React/Vite source project is under `www/`. Its current
+  release information is maintained separately from this repository README;
+  deployment status is not inferred from a local source build.
+- **Publication:** `@imrohit44/agent44-ts-client@0.3.0` is publicly published
+  under Apache-2.0. The v0.2.0 release remains available as historical context.
+  The immutable v0.3.0 npm tarball still contains pre-release README text; the
+  repository README and SDK documentation have been corrected. No new npm
+  version is being published for this synchronization.
+  See the [npm package](https://www.npmjs.com/package/@imrohit44/agent44-ts-client)
+  and [v0.3.0 GitHub release](https://github.com/imrohit44/Agent44/releases/tag/v0.3.0).
 - **Console command:** `agent44` provides `init`, `validate`, `run`, and
   `inspect` commands. `agent44 run` delegates proxy options and the downstream
   server command to the existing proxy entry point. The module-based proxy
@@ -298,8 +356,8 @@ The following items are planned work, not implemented release commitments:
   frozen JSON results before making further metric claims.
 - Pursue separately authorized held-out evaluation and broader
   end-to-end/system-level evaluation.
-- Confirm publication readiness and publishing process before a public
-  package release.
+- Continue validating SDK lifecycle and transport-failure behavior across
+  supported environments.
 
 ## Contributing
 

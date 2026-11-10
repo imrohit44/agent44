@@ -171,7 +171,7 @@ export class Agent44ProxyClient {
     });
     this.client = new Client({
       name: '@imrohit44/agent44-ts-client',
-      version: '0.2.0',
+      version: '0.3.0',
     });
     this.client.onerror = (error) => {
       if (this.stateValue === 'CONNECTING') {

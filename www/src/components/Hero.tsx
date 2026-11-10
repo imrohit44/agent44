@@ -289,11 +289,11 @@ export default function Hero() {
           </a>
           <a
             className="home-resource"
-            href="https://github.com/imrohit44/agent44/releases/tag/v0.2.0"
+            href="https://github.com/imrohit44/agent44/releases/tag/v0.3.0"
           >
             <span>
-              <span className="home-resource__type">PUBLISHED RELEASE</span>
-              <span className="home-resource__title">TypeScript client v0.2.0</span>
+              <span className="home-resource__type">CURRENT SDK RELEASE / NPM</span>
+              <span className="home-resource__title">TypeScript SDK v0.3.0</span>
             </span>
             <span aria-hidden="true" className="home-resource__arrow">↗</span>
           </a>
@@ -301,7 +301,7 @@ export default function Hero() {
         <div className="home-install">
           <span className="home-overline">INSTALL THE PUBLISHED CLIENT</span>
           <CodeBlock
-            code="npm install @imrohit44/agent44-ts-client@0.2.0"
+            code="npm install @imrohit44/agent44-ts-client"
             language="bash"
           />
         </div>
@@ -334,10 +334,10 @@ export default function Hero() {
             </span>
           </div>
           <div className="home-evidence__item">
-            <strong className="home-evidence__word">v0.2.0</strong>
+            <strong className="home-evidence__word">v0.3.0</strong>
             <span>
-              TypeScript client published and verified from its release
-              tarball.
+              TypeScript SDK published with lifecycle, timeout, and
+              cancellation improvements.
             </span>
           </div>
         </div>

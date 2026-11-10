@@ -120,7 +120,7 @@ export default function Documentation() {
       <div className="site-container documentation-page__intro">
         <PageHeader
           description="Start with the published TypeScript MCP client, understand its configuration, and follow a tool call through the Agent44 proxy."
-          eyebrow="DOCUMENTATION / TYPESCRIPT CLIENT 0.2.0"
+          eyebrow="DOCUMENTATION / TYPESCRIPT CLIENT 0.3.0"
           title="Build with Agent44."
         />
       </div>
@@ -249,6 +249,14 @@ export default function Documentation() {
                 <dt><code>env?: Record&lt;string, string&gt;</code></dt>
                 <dd>Environment options passed to the stdio transport.</dd>
               </div>
+              <div>
+                <dt><code>connectionTimeoutMs?: number</code></dt>
+                <dd>Connection timeout in milliseconds; defaults to 30 seconds.</dd>
+              </div>
+              <div>
+                <dt><code>requestTimeoutMs?: number</code></dt>
+                <dd>Default request timeout in milliseconds; defaults to the MCP SDK timeout.</dd>
+              </div>
             </dl>
             <p>
               Put the Agent44 proxy command and its options in the child
@@ -286,8 +294,9 @@ export default function Documentation() {
                 tool-level error without invoking the downstream tool.
               </li>
               <li>
-                <strong>Cleanup:</strong> call <code>cleanup()</code> to close
-                the MCP client transport and child process.
+                <strong>Cleanup:</strong> call <code>cleanup()</code> to ask
+                the MCP SDK to close its transport. For stdio, child-process
+                termination is best-effort and is not independently confirmed.
               </li>
             </ol>
             <a
@@ -384,17 +393,31 @@ export default function Documentation() {
               <article>
                 <h3><code>cleanup(): Promise&lt;void&gt;</code></h3>
                 <p>
-                  Closes the MCP client and transport. Cleanup can be called
-                  more than once; later connection attempts reject because the
-                  client is closed.
+                  Delegates transport shutdown to the MCP SDK. Concurrent
+                  calls share one cleanup operation; successful cleanup is
+                  idempotent, while failed transport closure can be retried.
+                  Cleanup also cancels shared connection startup and aborts
+                  pending requests. Later operations reject after successful
+                  closure.
                 </p>
               </article>
               <article>
                 <h3><code>Agent44ProxyClientOptions</code></h3>
                 <p>
-                  Optional <code>args</code>, <code>cwd</code>, and{" "}
-                  <code>env</code> properties described in{" "}
+                  Optional <code>args</code>, <code>cwd</code>, <code>env</code>,
+                  <code> connectionTimeoutMs</code>, and{" "}
+                  <code>requestTimeoutMs</code> properties described in{" "}
                   <a href="#configuration">Configuration</a>.
+                </p>
+              </article>
+              <article>
+                <h3><code>ConnectOptions</code> and <code>RequestOptions</code></h3>
+                <p>
+                  Connection and request calls accept an <code>AbortSignal</code>.
+                  A caller signal cancels that caller&apos;s wait without
+                  cancelling shared connection startup. Request options may
+                  override <code>timeoutMs</code>. Client-side cancellation
+                  does not guarantee downstream tool termination.
                 </p>
               </article>
             </div>
@@ -413,8 +436,8 @@ export default function Documentation() {
           >
             <p>
               The client can add a provenance reference to MCP request
-              metadata and extract a reference from response metadata. In
-              v0.2.0, the proxy forwards a dictionary-valued reference to the
+              metadata and extract a reference from response metadata. The
+              proxy forwards a dictionary-valued reference to the
               downstream server; this metadata transport does not validate
               the reference against the Python provenance registry or use it
               as policy evidence.

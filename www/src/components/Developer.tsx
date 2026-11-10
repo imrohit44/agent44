@@ -43,11 +43,16 @@ export default function Developer() {
             <h2>Install the published client</h2>
             <pre className="legacy-code"><code>npm install @imrohit44/agent44-ts-client</code></pre>
             <p>
-              Client v0.2.0 supports MCP stdio connection, discovery, tool
-              calls, and cleanup. It does not bundle the Python proxy.
+              SDK v0.3.0 supports MCP stdio connection, discovery, tool calls,
+              configurable timeouts, cancellation, and retryable cleanup. It
+              does not bundle the Python proxy.
             </p>
             <a href="https://www.npmjs.com/package/@imrohit44/agent44-ts-client">
               View the npm package
+            </a>
+            {" · "}
+            <a href="https://github.com/imrohit44/agent44/releases/tag/v0.3.0">
+              v0.3.0 release notes
             </a>
           </article>
         </div>

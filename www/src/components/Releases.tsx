@@ -15,9 +15,14 @@ const releaseLinks = [
     detail: "@imrohit44/agent44-ts-client",
   },
   {
-    href: "https://github.com/imrohit44/agent44/releases/tag/v0.2.0",
+    href: "https://github.com/imrohit44/agent44/releases/tag/v0.3.0",
     label: "GitHub release",
-    detail: "Agent44 TypeScript Client v0.2.0",
+    detail: "Agent44 TypeScript SDK v0.3.0",
+  },
+  {
+    href: "https://github.com/imrohit44/agent44/blob/main/typescript/CHANGELOG.md",
+    label: "Changelog",
+    detail: "SDK release history",
   },
 ];
 
@@ -29,7 +34,7 @@ export default function Releases() {
           <PageHeader
             description="Published package details and the verified scope of the Agent44 TypeScript client release."
             eyebrow="RELEASES / PUBLISHED"
-            title="Agent44 TypeScript Client v0.2.0."
+            title="Agent44 TypeScript SDK v0.3.0."
           />
         </div>
       </section>
@@ -38,7 +43,7 @@ export default function Releases() {
         <div className="release-current__heading">
           <div>
             <p className="release-overline">CURRENT PUBLISHED RELEASE</p>
-            <h2>0.2.0</h2>
+            <h2>0.3.0</h2>
           </div>
           <span className="release-status">
             <span aria-hidden="true" />
@@ -78,10 +83,10 @@ export default function Releases() {
       <Section className="release-highlights">
         <header className="release-section-heading">
           <p className="release-overline">WHAT SHIPPED</p>
-          <h2>Real MCP stdio transport.</h2>
+          <h2>More reliable MCP client lifecycle.</h2>
           <p>
-            Version 0.2.0 connects a TypeScript MCP client to the Agent44
-            Python proxy and its downstream MCP server.
+            Version 0.3.0 builds on the stdio transport introduced in 0.2.0
+            with explicit connection and request lifecycle controls.
           </p>
         </header>
 
@@ -89,42 +94,44 @@ export default function Releases() {
           <li>
             <span>01</span>
             <div>
-              <h3>Initialize a session and discover tools</h3>
+              <h3>Isolate connection cancellation</h3>
               <p>
-                The client starts a configured command through stdio, performs
-                MCP initialization, and exposes downstream tool discovery.
+                A caller can cancel its wait without cancelling a connection
+                attempt shared with other callers. Explicit cleanup cancels
+                startup for everyone waiting on it.
               </p>
             </div>
           </li>
           <li>
             <span>02</span>
             <div>
-              <h3>Invoke tools and close the child process</h3>
+              <h3>Bound and cancel requests</h3>
               <p>
-                Tool calls return a simplified result shape, and
-                <code> cleanup() </code> closes the transport and child
-                process.
+                Connection and request timeouts are configurable. Request
+                cancellation cleans up client-side pending work but does not
+                guarantee that a downstream tool stops executing.
               </p>
             </div>
           </li>
           <li>
             <span>03</span>
             <div>
-              <h3>Configure the spawned process</h3>
+              <h3>Retry failed cleanup</h3>
               <p>
-                Optional arguments, working directory, and environment are
-                supported by the client options.
+                Concurrent cleanup calls share one operation. Successful
+                cleanup is idempotent; if transport closure fails, the client
+                reports the error and allows a later cleanup attempt.
               </p>
             </div>
           </li>
           <li>
             <span>04</span>
             <div>
-              <h3>Carry provenance references as MCP metadata</h3>
+              <h3>Use typed lifecycle errors</h3>
               <p>
-                The client can add <code>_meta.provenanceReference</code> and
-                extract a reference from a response. This is metadata
-                transport, not provenance validation or authorization.
+                Explicit client states and error codes distinguish policy tool
+                errors from connection, timeout, cancellation, and cleanup
+                failures.
               </p>
             </div>
           </li>
@@ -136,16 +143,16 @@ export default function Releases() {
           <p className="release-overline">VERIFICATION SCOPE</p>
           <h2>What the integration check exercised.</h2>
           <p>
-            The release source and published package were checked with a local
-            deterministic MCP server through the Python proxy.
+            The repository source was checked with a local deterministic MCP
+            server through the Python proxy. The npm registry confirms that
+            version 0.3.0 is published.
           </p>
         </header>
         <ul className="release-verification__list">
-          <li>MCP initialization and downstream tool discovery</li>
-          <li>Successful calls and policy denial</li>
-          <li>No downstream execution for policy-denied calls</li>
+          <li>Deterministic connection, cancellation, timeout, and cleanup reliability tests</li>
+          <li>Real MCP stdio initialization, discovery, and tool-call integration</li>
+          <li>Policy denial including no downstream execution for denied calls</li>
           <li>Metadata round-trip and unknown-tool error handling</li>
-          <li>Client shutdown and process cleanup</li>
         </ul>
         <Callout title="Release boundary" tone="warning">
           <p>
@@ -153,6 +160,17 @@ export default function Releases() {
             not establish comprehensive attack prevention, production
             security, or end-to-end provenance enforcement. Using the proxy
             also requires the Agent44 Python project and its dependencies.
+            Client cancellation does not guarantee downstream tool
+            termination.
+          </p>
+        </Callout>
+        <Callout title="Stdio shutdown limitation" tone="warning">
+          <p>
+            <code>cleanup()</code> delegates transport shutdown to the MCP SDK.
+            For stdio transports, child-process termination is best-effort;
+            successful cleanup does not independently confirm that the child
+            process has exited. Applications requiring strict process-exit
+            confirmation should monitor the child process separately.
           </p>
         </Callout>
       </Section>
@@ -160,17 +178,17 @@ export default function Releases() {
       <Section className="release-version-note">
         <p>
           <span className="release-overline">VERSION CONTEXT</span>
-          Published <strong>0.2.0</strong> includes the stdio transport
-          integration described here. Published <strong>0.1.0</strong>
-          predates that functionality. The repository roadmap lists future
-          work separately; planned items are not part of this release.
+          Published <strong>0.3.0</strong> adds lifecycle reliability to the
+          stdio transport introduced in <strong>0.2.0</strong>. Published
+          <strong>0.1.0</strong> predates that transport. Planned work is not
+          part of this release.
         </p>
         <Callout title="Published package README" tone="warning">
           <p>
-            The README embedded in the immutable npm v0.2.0 tarball predates
-            publication and incorrectly says 0.2.0 is unpublished. The
-            repository release notes clarify the published status; the
-            existing npm tarball was not changed.
+            The published v0.3.0 npm tarball still contains pre-release README
+            text. The current repository README and changelog are accurate;
+            the published archive is immutable, and this synchronization does
+            not publish another npm version.
           </p>
         </Callout>
       </Section>
