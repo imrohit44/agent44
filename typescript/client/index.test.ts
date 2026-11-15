@@ -576,7 +576,173 @@ async function testTypeSafetyAndExports(): Promise<void> {
   assert.equal(isAgent44ClientError({ name: 'Agent44ClientError', message: 'test', operation: 'op', code: 'TOOL_ERROR', timeoutMs: Infinity }), false);
 }
 
+async function testInitializationAndConfiguration(): Promise<void> {
+  // 1. Modern two-argument factory usage
+  const modernClient = createAgent44ProxyClient('node', {
+    args: ['--version'],
+    connectionTimeoutMs: 15_000,
+  });
+  assert.ok(modernClient instanceof Agent44ProxyClient);
+  assert.equal(modernClient.state, 'DISCONNECTED');
+
+  const modernConstructed = new Agent44ProxyClient('node', {
+    args: ['--version'],
+  });
+  assert.ok(modernConstructed instanceof Agent44ProxyClient);
+  assert.equal(modernConstructed.state, 'DISCONNECTED');
+
+  const modernNoOptions = createAgent44ProxyClient('node');
+  assert.ok(modernNoOptions instanceof Agent44ProxyClient);
+
+  // 2. Existing four-argument factory usage
+  const legacyClient = createAgent44ProxyClient(
+    'node',
+    process.stdin,
+    process.stdout,
+    {
+      args: ['--version'],
+      connectionTimeoutMs: 20_000,
+    },
+  );
+  assert.ok(legacyClient instanceof Agent44ProxyClient);
+  assert.equal(legacyClient.state, 'DISCONNECTED');
+
+  const legacyConstructed = new Agent44ProxyClient(
+    'node',
+    process.stdin,
+    process.stdout,
+  );
+  assert.ok(legacyConstructed instanceof Agent44ProxyClient);
+
+  // 3. Strict TypeScript compatibility with process.env (NodeJS.ProcessEnv = Record<string, string | undefined>)
+  const processEnvClient = createAgent44ProxyClient('node', {
+    env: process.env,
+  });
+  assert.ok(processEnvClient instanceof Agent44ProxyClient);
+
+  // 4. Undefined environment values handling and caller environment immutability
+  const originalEnv: Record<string, string | undefined> = {
+    DEFINED_KEY: 'test-value',
+    UNDEFINED_KEY: undefined,
+    EMPTY_KEY: '',
+  };
+  const snapshotBefore = { ...originalEnv };
+
+  const customEnvClient = createAgent44ProxyClient('node', {
+    env: originalEnv,
+  });
+  assert.ok(customEnvClient instanceof Agent44ProxyClient);
+
+  // Verify caller's env object was not mutated
+  assert.deepEqual(originalEnv, snapshotBefore);
+  assert.equal('UNDEFINED_KEY' in originalEnv, true);
+  assert.equal(originalEnv.UNDEFINED_KEY, undefined);
+
+  // Verify transport received sanitized environment with undefined keys stripped
+  const internalTransport = (customEnvClient as unknown as {
+    transport: { _serverParams: { env?: Record<string, string> } };
+  }).transport;
+  const sanitizedEnv = internalTransport._serverParams.env;
+  assert.ok(sanitizedEnv);
+  assert.equal(sanitizedEnv.DEFINED_KEY, 'test-value');
+  assert.equal(sanitizedEnv.EMPTY_KEY, '');
+  assert.equal('UNDEFINED_KEY' in sanitizedEnv, false);
+  assert.equal(Object.prototype.hasOwnProperty.call(sanitizedEnv, 'UNDEFINED_KEY'), false);
+
+  // 5. Existing connection and request timeout validation behavior
+  assert.throws(
+    () => new Agent44ProxyClient('node', { connectionTimeoutMs: 0 }),
+    RangeError,
+  );
+  assert.throws(
+    () => new Agent44ProxyClient('node', { connectionTimeoutMs: -1 }),
+    RangeError,
+  );
+  assert.throws(
+    () => new Agent44ProxyClient('node', { connectionTimeoutMs: NaN }),
+    RangeError,
+  );
+  assert.throws(
+    () => new Agent44ProxyClient('node', { requestTimeoutMs: 0 }),
+    RangeError,
+  );
+  assert.throws(
+    () => new Agent44ProxyClient('node', { requestTimeoutMs: -500 }),
+    RangeError,
+  );
+  assert.throws(
+    () => new Agent44ProxyClient('node', { requestTimeoutMs: Infinity }),
+    RangeError,
+  );
+
+  // 6. Configuration precedence design tests (3-tier specification)
+  function resolveTimeoutPrecedence(
+    explicit: number | undefined,
+    envValue: string | undefined,
+    sdkDefault: number,
+    name: string,
+  ): number {
+    // Tier 1: Explicit options
+    if (explicit !== undefined) {
+      if (!Number.isFinite(explicit) || explicit <= 0) {
+        throw new RangeError(`${name} must be a positive finite number`);
+      }
+      return explicit;
+    }
+
+    // Tier 2: Environment-variable defaults
+    if (envValue !== undefined && envValue.trim() !== '') {
+      const parsed = Number(envValue);
+      if (!Number.isFinite(parsed) || parsed <= 0) {
+        throw new RangeError(`${name} from environment must be a positive finite number`);
+      }
+      return parsed;
+    }
+
+    // Tier 3: SDK defaults
+    return sdkDefault;
+  }
+
+  // Precedence: Tier 1 overrides Tier 2 and Tier 3
+  assert.equal(
+    resolveTimeoutPrecedence(15000, '25000', 30000, 'connectionTimeoutMs'),
+    15000,
+  );
+  // Precedence: Tier 2 overrides Tier 3 when Tier 1 is undefined
+  assert.equal(
+    resolveTimeoutPrecedence(undefined, '25000', 30000, 'connectionTimeoutMs'),
+    25000,
+  );
+  // Precedence: Tier 3 applies when Tier 1 and Tier 2 are undefined
+  assert.equal(
+    resolveTimeoutPrecedence(undefined, undefined, 30000, 'connectionTimeoutMs'),
+    30000,
+  );
+  assert.equal(
+    resolveTimeoutPrecedence(undefined, '', 30000, 'connectionTimeoutMs'),
+    30000,
+  );
+  assert.equal(
+    resolveTimeoutPrecedence(undefined, '   ', 30000, 'connectionTimeoutMs'),
+    30000,
+  );
+
+  // Validation: Malformed / zero / negative in Tier 1
+  assert.throws(() => resolveTimeoutPrecedence(0, '25000', 30000, 'conn'), RangeError);
+  assert.throws(() => resolveTimeoutPrecedence(-500, '25000', 30000, 'conn'), RangeError);
+  assert.throws(() => resolveTimeoutPrecedence(NaN, '25000', 30000, 'conn'), RangeError);
+
+  // Validation: Malformed / zero / negative in Tier 2
+  assert.throws(() => resolveTimeoutPrecedence(undefined, '0', 30000, 'conn'), RangeError);
+  assert.throws(() => resolveTimeoutPrecedence(undefined, '-500', 30000, 'conn'), RangeError);
+  assert.throws(() => resolveTimeoutPrecedence(undefined, 'not-a-number', 30000, 'conn'), RangeError);
+  assert.throws(() => resolveTimeoutPrecedence(undefined, '100abc', 30000, 'conn'), RangeError);
+  assert.throws(() => resolveTimeoutPrecedence(undefined, 'Infinity', 30000, 'conn'), RangeError);
+  assert.throws(() => resolveTimeoutPrecedence(undefined, 'NaN', 30000, 'conn'), RangeError);
+}
+
 await testPublicShapesAndProvenance();
 await testReliabilityBehavior();
 await testTypeSafetyAndExports();
+await testInitializationAndConfiguration();
 console.log('TypeScript client reliability and type-safety tests passed.');

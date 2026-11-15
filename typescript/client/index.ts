@@ -137,7 +137,7 @@ export function isAgent44ClientError(error: unknown): error is Agent44ClientErro
 export interface Agent44ProxyClientOptions {
   args?: string[];
   cwd?: string;
-  env?: Record<string, string>;
+  env?: Record<string, string | undefined>;
   connectionTimeoutMs?: number;
   requestTimeoutMs?: number;
 }
@@ -195,6 +195,30 @@ function isRequestOptions(value: unknown): value is RequestOptions {
   );
 }
 
+function sanitizeEnvironment(
+  env: Record<string, string | undefined> | undefined,
+): Record<string, string> | undefined {
+  if (!env) {
+    return undefined;
+  }
+  const sanitized: Record<string, string> = {};
+  for (const [key, value] of Object.entries(env)) {
+    if (value !== undefined) {
+      sanitized[key] = value;
+    }
+  }
+  return sanitized;
+}
+
+function isStream(value: unknown): boolean {
+  return (
+    typeof value === 'object'
+    && value !== null
+    && 'pipe' in value
+    && typeof (value as { pipe?: unknown }).pipe === 'function'
+  );
+}
+
 export class Agent44ProxyClient {
   private readonly client: Client;
   private readonly transport: StdioClientTransport;
@@ -213,22 +237,37 @@ export class Agent44ProxyClient {
 
   constructor(
     stdioCommand: string,
+    options?: Agent44ProxyClientOptions,
+  );
+  constructor(
+    stdioCommand: string,
     _stdin: NodeJS.ReadableStream,
     _stdout: NodeJS.WritableStream,
-    options: Agent44ProxyClientOptions = {},
+    options?: Agent44ProxyClientOptions,
+  );
+  constructor(
+    stdioCommand: string,
+    stdinOrOptions?: NodeJS.ReadableStream | Agent44ProxyClientOptions,
+    _stdout?: NodeJS.WritableStream,
+    options?: Agent44ProxyClientOptions,
   ) {
+    const resolvedOptions = (
+      _stdout !== undefined || isStream(stdinOrOptions)
+        ? options ?? {}
+        : (stdinOrOptions as Agent44ProxyClientOptions | undefined) ?? {}
+    );
     this.connectionTimeoutMs =
-      options.connectionTimeoutMs ?? DEFAULT_CONNECTION_TIMEOUT_MS;
+    resolvedOptions.connectionTimeoutMs ?? DEFAULT_CONNECTION_TIMEOUT_MS;
     this.requestTimeoutMs =
-      options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MSEC;
+    resolvedOptions.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MSEC;
     validateTimeout(this.connectionTimeoutMs, 'connectionTimeoutMs');
     validateTimeout(this.requestTimeoutMs, 'requestTimeoutMs');
 
     this.transport = new StdioClientTransport({
       command: stdioCommand,
-      args: options.args,
-      cwd: options.cwd,
-      env: options.env,
+      args: resolvedOptions.args,
+      cwd: resolvedOptions.cwd,
+      env: sanitizeEnvironment(resolvedOptions.env),
     });
     this.client = new Client({
       name: '@imrohit44/agent44-ts-client',
@@ -382,326 +421,326 @@ export class Agent44ProxyClient {
     return result.tools;
   }
 
-    callTool<TArgs extends object = Record < string, unknown>> (
-      toolName: string,
-          args: TArgs,
-            provenance ?: ProvenanceReference,
-            options ?: RequestOptions,
+  callTool<TArgs extends object = Record<string, unknown>>(
+    toolName: string,
+    args: TArgs,
+    provenance?: ProvenanceReference,
+    options?: RequestOptions,
   ): Promise<ToolCallResult>;
-  callTool < TArgs extends object = Record < string, unknown >> (
+  callTool<TArgs extends object = Record<string, unknown>>(
     toolName: string,
-  args: TArgs,
-  options ?: RequestOptions,
-): Promise<ToolCallResult>;
-  async callTool < TArgs extends object = Record < string, unknown >> (
+    args: TArgs,
+    options?: RequestOptions,
+  ): Promise<ToolCallResult>;
+  async callTool<TArgs extends object = Record<string, unknown>>(
     toolName: string,
-  args: TArgs,
-  provenanceOrOptions ?: ProvenanceReference | RequestOptions,
-  requestOptions ?: RequestOptions,
-): Promise < ToolCallResult > {
-  const provenance = isProvenanceReference(provenanceOrOptions)
-    ? provenanceOrOptions
-    : undefined;
-  const options = isRequestOptions(provenanceOrOptions)
-    ? provenanceOrOptions
-    : requestOptions ?? {};
-  validateTimeout(options.timeoutMs ?? this.requestTimeoutMs, 'timeoutMs');
+    args: TArgs,
+    provenanceOrOptions?: ProvenanceReference | RequestOptions,
+    requestOptions?: RequestOptions,
+  ): Promise<ToolCallResult> {
+    const provenance = isProvenanceReference(provenanceOrOptions)
+      ? provenanceOrOptions
+      : undefined;
+    const options = isRequestOptions(provenanceOrOptions)
+      ? provenanceOrOptions
+      : requestOptions ?? {};
+    validateTimeout(options.timeoutMs ?? this.requestTimeoutMs, 'timeoutMs');
 
-  if(options.signal?.aborted) {
-  throw this.createError('REQUEST_CANCELLED', 'Tool call was cancelled', {
-    operation: 'callTool',
-    toolName,
-    cause: options.signal.reason,
-  });
-}
+    if (options.signal?.aborted) {
+      throw this.createError('REQUEST_CANCELLED', 'Tool call was cancelled', {
+        operation: 'callTool',
+        toolName,
+        cause: options.signal.reason,
+      });
+    }
 
-await this.ensureConnected(options.signal);
+    await this.ensureConnected(options.signal);
 
-const callParams: CallToolRequestParams = {
-  name: toolName,
-  arguments: { ...(args as Record<string, unknown>) },
-};
-if (provenance) {
-  callParams._meta = {
-    provenanceReference: {
-      id: provenance.id,
-      sourceTool: provenance.sourceTool,
-    },
-  };
-}
+    const callParams: CallToolRequestParams = {
+      name: toolName,
+      arguments: { ...(args as Record<string, unknown>) },
+    };
+    if (provenance) {
+      callParams._meta = {
+        provenanceReference: {
+          id: provenance.id,
+          sourceTool: provenance.sourceTool,
+        },
+      };
+    }
 
-const response = await this.runRequest(
-  'callTool',
-  toolName,
-  options,
-  (signal) => this.client.callTool(
-    callParams,
-    CallToolResultSchema,
-    {
-      signal,
-      timeout: options.timeoutMs ?? this.requestTimeoutMs,
-    },
-  ),
-);
-if (!isMCPCallToolResult(response)) {
-  throw this.createError(
-    'TOOL_ERROR',
-    'Task-based MCP tool results are not supported by this client',
-    { operation: 'callTool', toolName },
-  );
-}
-
-const extractedProvenance = this.extractProvenance(response);
-const text =
-  response.content?.[0]?.type === 'text'
-    ? response.content[0].text
-    : null;
-if (response.isError) {
-  return {
-    success: false,
-    text,
-    error: text ?? 'Tool call failed',
-    provenance: extractedProvenance,
-  };
-}
-return {
-  success: true,
-  text,
-  error: null,
-  provenance: extractedProvenance,
-};
-  }
-
-extractProvenance(
-  result: MCPCallToolResult,
-): ProvenanceReference | undefined {
-  const reference = result._meta?.provenanceReference;
-  return isProvenanceReference(reference) ? reference : undefined;
-}
-
-cleanup(): Promise < void> {
-  if(this.closeOperation) {
-  return this.closeOperation;
-}
-if (this.stateValue === 'CLOSED') {
-  return Promise.resolve();
-}
-
-this.stateValue = 'CLOSING';
-const closedError = this.clientClosedError('cleanup');
-for (const controller of this.pendingRequests) {
-  controller.abort(closedError);
-}
-if (this.connectAbortController && !this.connectAbortController.signal.aborted) {
-  this.connectionAbortKind = 'closed';
-  this.connectionAbortReason = closedError;
-  this.connectAbortController.abort(this.connectionAbortReason);
-}
-
-const operation = (async () => {
-  if (this.connection) {
-    await this.connection.catch(() => undefined);
-  }
-  try {
-    await this.closeTransport();
-    this.stateValue = 'CLOSED';
-  } catch (error) {
-    this.stateValue = 'FAILED';
-    const cleanupError = this.createError(
-      'CLEANUP_FAILED',
-      'Failed to close the MCP client transport',
-      { operation: 'cleanup', cause: error },
+    const response = await this.runRequest(
+      'callTool',
+      toolName,
+      options,
+      (signal) => this.client.callTool(
+        callParams,
+        CallToolResultSchema,
+        {
+          signal,
+          timeout: options.timeoutMs ?? this.requestTimeoutMs,
+        },
+      ),
     );
-    this.terminalError = cleanupError;
-    throw cleanupError;
-  }
-})();
+    if (!isMCPCallToolResult(response)) {
+      throw this.createError(
+        'TOOL_ERROR',
+        'Task-based MCP tool results are not supported by this client',
+        { operation: 'callTool', toolName },
+      );
+    }
 
-this.closeOperation = operation;
-void operation.catch(() => {
-  if (this.closeOperation === operation) {
-    this.closeOperation = undefined;
+    const extractedProvenance = this.extractProvenance(response);
+    const text =
+      response.content?.[0]?.type === 'text'
+        ? response.content[0].text
+        : null;
+    if (response.isError) {
+      return {
+        success: false,
+        text,
+        error: text ?? 'Tool call failed',
+        provenance: extractedProvenance,
+      };
+    }
+    return {
+      success: true,
+      text,
+      error: null,
+      provenance: extractedProvenance,
+    };
   }
-});
 
-return operation;
+  extractProvenance(
+    result: MCPCallToolResult,
+  ): ProvenanceReference | undefined {
+    const reference = result._meta?.provenanceReference;
+    return isProvenanceReference(reference) ? reference : undefined;
   }
 
-  private async ensureConnected(signal ?: AbortSignal): Promise < void> {
-  if(this.stateValue === 'CONNECTED') {
-  return;
-}
-if (this.stateValue === 'FAILED') {
-  throw this.terminalError
-  ?? this.createError('INVALID_STATE', 'The client connection has failed', {
-    operation: 'connect',
-  });
-}
-if (this.stateValue === 'CLOSING' || this.stateValue === 'CLOSED') {
-  throw this.clientClosedError('connect');
-}
-await this.connect({ signal });
+  cleanup(): Promise<void> {
+    if (this.closeOperation) {
+      return this.closeOperation;
+    }
+    if (this.stateValue === 'CLOSED') {
+      return Promise.resolve();
+    }
+
+    this.stateValue = 'CLOSING';
+    const closedError = this.clientClosedError('cleanup');
+    for (const controller of this.pendingRequests) {
+      controller.abort(closedError);
+    }
+    if (this.connectAbortController && !this.connectAbortController.signal.aborted) {
+      this.connectionAbortKind = 'closed';
+      this.connectionAbortReason = closedError;
+      this.connectAbortController.abort(this.connectionAbortReason);
+    }
+
+    const operation = (async () => {
+      if (this.connection) {
+        await this.connection.catch(() => undefined);
+      }
+      try {
+        await this.closeTransport();
+        this.stateValue = 'CLOSED';
+      } catch (error) {
+        this.stateValue = 'FAILED';
+        const cleanupError = this.createError(
+          'CLEANUP_FAILED',
+          'Failed to close the MCP client transport',
+          { operation: 'cleanup', cause: error },
+        );
+        this.terminalError = cleanupError;
+        throw cleanupError;
+      }
+    })();
+
+    this.closeOperation = operation;
+    void operation.catch(() => {
+      if (this.closeOperation === operation) {
+        this.closeOperation = undefined;
+      }
+    });
+
+    return operation;
+  }
+
+  private async ensureConnected(signal?: AbortSignal): Promise<void> {
+    if (this.stateValue === 'CONNECTED') {
+      return;
+    }
+    if (this.stateValue === 'FAILED') {
+      throw this.terminalError
+      ?? this.createError('INVALID_STATE', 'The client connection has failed', {
+        operation: 'connect',
+      });
+    }
+    if (this.stateValue === 'CLOSING' || this.stateValue === 'CLOSED') {
+      throw this.clientClosedError('connect');
+    }
+    await this.connect({ signal });
   }
 
   private async waitForConnection(
-  connection: Promise<void>,
-  signal ?: AbortSignal,
-): Promise < void> {
-  if(!signal) {
-    return connection;
-  }
-    if(signal.aborted) {
-  throw this.createError('REQUEST_CANCELLED', 'Connection wait was cancelled', {
-    operation: 'connect',
-    cause: signal.reason,
-  });
-}
-let abortListener: (() => void) | undefined;
-const cancelled = new Promise<never>((_, reject) => {
-  abortListener = () => reject(
-    this.createError('REQUEST_CANCELLED', 'Connection wait was cancelled', {
-      operation: 'connect',
-      cause: signal.reason,
-    }),
-  );
-  signal.addEventListener('abort', abortListener, { once: true });
-});
-try {
-  await Promise.race([connection, cancelled]);
-} finally {
-  if (abortListener) {
-    signal.removeEventListener('abort', abortListener);
-  }
-}
+    connection: Promise<void>,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    if (!signal) {
+      return connection;
+    }
+    if (signal.aborted) {
+      throw this.createError('REQUEST_CANCELLED', 'Connection wait was cancelled', {
+        operation: 'connect',
+        cause: signal.reason,
+      });
+    }
+    let abortListener: (() => void) | undefined;
+    const cancelled = new Promise<never>((_, reject) => {
+      abortListener = () => reject(
+        this.createError('REQUEST_CANCELLED', 'Connection wait was cancelled', {
+          operation: 'connect',
+          cause: signal.reason,
+        }),
+      );
+      signal.addEventListener('abort', abortListener, { once: true });
+    });
+    try {
+      await Promise.race([connection, cancelled]);
+    } finally {
+      if (abortListener) {
+        signal.removeEventListener('abort', abortListener);
+      }
+    }
   }
 
   private async runRequest<T>(
-  operation: 'listTools' | 'callTool',
-  toolName: string | undefined,
-  options: RequestOptions,
-  request: (signal: AbortSignal) => Promise<T>,
-): Promise < T > {
-  validateTimeout(
-    options.timeoutMs ?? this.requestTimeoutMs,
-  'timeoutMs',
+    operation: 'listTools' | 'callTool',
+    toolName: string | undefined,
+    options: RequestOptions,
+    request: (signal: AbortSignal) => Promise<T>,
+  ): Promise<T> {
+    validateTimeout(
+      options.timeoutMs ?? this.requestTimeoutMs,
+      'timeoutMs',
     );
-  if(this.stateValue !== 'CONNECTED') {
-  if (this.stateValue === 'CLOSING' || this.stateValue === 'CLOSED') {
-    throw this.clientClosedError(operation, undefined, toolName);
-  }
-  if (this.stateValue === 'FAILED' && this.terminalError) {
-    throw this.terminalError;
-  }
-  throw this.createError('INVALID_STATE', 'The client is not connected', {
-    operation,
-    toolName,
-  });
-}
-if (options.signal?.aborted) {
-  throw this.createError('REQUEST_CANCELLED', 'Request was cancelled', {
-    operation,
-    toolName,
-    cause: options.signal.reason,
-  });
-}
+    if (this.stateValue !== 'CONNECTED') {
+      if (this.stateValue === 'CLOSING' || this.stateValue === 'CLOSED') {
+        throw this.clientClosedError(operation, undefined, toolName);
+      }
+      if (this.stateValue === 'FAILED' && this.terminalError) {
+        throw this.terminalError;
+      }
+      throw this.createError('INVALID_STATE', 'The client is not connected', {
+        operation,
+        toolName,
+      });
+    }
+    if (options.signal?.aborted) {
+      throw this.createError('REQUEST_CANCELLED', 'Request was cancelled', {
+        operation,
+        toolName,
+        cause: options.signal.reason,
+      });
+    }
 
-let abortListener: (() => void) | undefined;
-const controller = new AbortController();
-if (options.signal) {
-  abortListener = () => controller.abort(options.signal?.reason);
-  options.signal.addEventListener('abort', abortListener, { once: true });
-}
-this.pendingRequests.add(controller);
+    let abortListener: (() => void) | undefined;
+    const controller = new AbortController();
+    if (options.signal) {
+      abortListener = () => controller.abort(options.signal?.reason);
+      options.signal.addEventListener('abort', abortListener, { once: true });
+    }
+    this.pendingRequests.add(controller);
 
-try {
-  return await request(controller.signal);
-} catch (error) {
-  if (this.getState() === 'CLOSING' || this.getState() === 'CLOSED') {
-    throw this.clientClosedError(operation, error, toolName);
-  }
-  if (this.getState() === 'FAILED' && this.terminalError) {
-    throw this.createError('SERVER_EXITED', 'The MCP server exited during a request', {
-      operation,
-      toolName,
-      cause: error,
-    });
-  }
-  if (options.signal?.aborted || isAbortError(error)) {
-    throw this.createError('REQUEST_CANCELLED', 'Request was cancelled', {
-      operation,
-      toolName,
-      cause: options.signal?.reason ?? error,
-    });
-  }
-  if (isRequestTimeout(error)) {
-    throw this.createError('REQUEST_TIMEOUT', 'MCP request timed out', {
-      operation,
-      toolName,
-      timeoutMs: options.timeoutMs ?? this.requestTimeoutMs,
-      cause: error,
-    });
-  }
-  throw this.createError(
-    'REQUEST_FAILED',
-    `MCP ${operation} request failed: ${errorMessage(error)}`,
-    { operation, toolName, cause: error },
-  );
-} finally {
-  this.pendingRequests.delete(controller);
-  if (abortListener && options.signal) {
-    options.signal.removeEventListener('abort', abortListener);
-  }
-}
+    try {
+      return await request(controller.signal);
+    } catch (error) {
+      if (this.getState() === 'CLOSING' || this.getState() === 'CLOSED') {
+        throw this.clientClosedError(operation, error, toolName);
+      }
+      if (this.getState() === 'FAILED' && this.terminalError) {
+        throw this.createError('SERVER_EXITED', 'The MCP server exited during a request', {
+          operation,
+          toolName,
+          cause: error,
+        });
+      }
+      if (options.signal?.aborted || isAbortError(error)) {
+        throw this.createError('REQUEST_CANCELLED', 'Request was cancelled', {
+          operation,
+          toolName,
+          cause: options.signal?.reason ?? error,
+        });
+      }
+      if (isRequestTimeout(error)) {
+        throw this.createError('REQUEST_TIMEOUT', 'MCP request timed out', {
+          operation,
+          toolName,
+          timeoutMs: options.timeoutMs ?? this.requestTimeoutMs,
+          cause: error,
+        });
+      }
+      throw this.createError(
+        'REQUEST_FAILED',
+        `MCP ${operation} request failed: ${errorMessage(error)}`,
+        { operation, toolName, cause: error },
+      );
+    } finally {
+      this.pendingRequests.delete(controller);
+      if (abortListener && options.signal) {
+        options.signal.removeEventListener('abort', abortListener);
+      }
+    }
   }
 
-  private async closeTransport(): Promise < void> {
-  // Single-flight: if close is already in progress, wait for it to complete.
-  // This prevents duplicate transport close calls while ensuring that a
-  // subsequently called close() can retry after a failure (the cached
-  // promise is cleared on completion or after a rejection).
-  if(this.transportClose) {
-  return this.transportClose;
-}
+  private async closeTransport(): Promise<void> {
+    // Single-flight: if close is already in progress, wait for it to complete.
+    // This prevents duplicate transport close calls while ensuring that a
+    // subsequently called close() can retry after a failure (the cached
+    // promise is cleared on completion or after a rejection).
+    if (this.transportClose) {
+      return this.transportClose;
+    }
 
-try {
-  this.transportClose = this.client.close();
-  await this.transportClose;
-  // Clear after successful completion so future close() calls can
-  // proceed (idempotent transport close is safe to retry).
-  this.transportClose = undefined;
-  return;
-} catch (error) {
-  // Clear so that a future close() attempt can proceed (retry policy).
-  // The original error is preserved via Agent44ClientError.cause.
-  this.transportClose = undefined;
-  throw error;
-}
+    try {
+      this.transportClose = this.client.close();
+      await this.transportClose;
+      // Clear after successful completion so future close() calls can
+      // proceed (idempotent transport close is safe to retry).
+      this.transportClose = undefined;
+      return;
+    } catch (error) {
+      // Clear so that a future close() attempt can proceed (retry policy).
+      // The original error is preserved via Agent44ClientError.cause.
+      this.transportClose = undefined;
+      throw error;
+    }
   }
 
   private getState(): Agent44ClientState {
-  return this.stateValue;
-}
+    return this.stateValue;
+  }
 
   private connectionAbortError(): Agent44ClientError {
-  if (this.connectionAbortKind === 'timeout') {
-    return this.createError(
-      'CONNECTION_TIMEOUT',
-      `MCP server connection timed out after ${this.connectionTimeoutMs}ms`,
-      {
-        operation: 'connect',
-        timeoutMs: this.connectionTimeoutMs,
-        cause: this.connectionAbortReason,
-      },
-    );
+    if (this.connectionAbortKind === 'timeout') {
+      return this.createError(
+        'CONNECTION_TIMEOUT',
+        `MCP server connection timed out after ${this.connectionTimeoutMs}ms`,
+        {
+          operation: 'connect',
+          timeoutMs: this.connectionTimeoutMs,
+          cause: this.connectionAbortReason,
+        },
+      );
+    }
+    if (this.connectionAbortKind === 'closed') {
+      return this.clientClosedError('connect', this.connectionAbortReason);
+    }
+    return this.createError('REQUEST_CANCELLED', 'Connection was cancelled', {
+      operation: 'connect',
+      cause: this.connectionAbortReason,
+    });
   }
-  if (this.connectionAbortKind === 'closed') {
-    return this.clientClosedError('connect', this.connectionAbortReason);
-  }
-  return this.createError('REQUEST_CANCELLED', 'Connection was cancelled', {
-    operation: 'connect',
-    cause: this.connectionAbortReason,
-  });
-}
 
   private asConnectionError(error: unknown): Agent44ClientError {
     if (isAgent44ClientError(error)) {
@@ -734,7 +773,7 @@ try {
     );
   }
 
-  private failForServerExit(cause ?: unknown): void {
+  private failForServerExit(cause?: unknown): void {
     this.stateValue = 'FAILED';
     this.terminalError = this.createError(
       'SERVER_EXITED',
@@ -745,8 +784,8 @@ try {
 
   private clientClosedError(
     operation: string,
-    cause ?: unknown,
-    toolName ?: string,
+    cause?: unknown,
+    toolName?: string,
   ): Agent44ClientError {
     return this.createError(
       'CLIENT_CLOSED',
@@ -759,11 +798,11 @@ try {
     code: Agent44ClientErrorCode,
     message: string,
     context: {
-    operation: string;
-    cause?: unknown;
-    toolName?: string;
-    timeoutMs?: number;
-  },
+      operation: string;
+      cause?: unknown;
+      toolName?: string;
+      timeoutMs?: number;
+    },
   ): Agent44ClientError {
     return new Agent44ClientError({
       code,
@@ -775,9 +814,30 @@ try {
 
 export function createAgent44ProxyClient(
   stdioCommand: string,
+  options?: Agent44ProxyClientOptions,
+): Agent44ProxyClient;
+export function createAgent44ProxyClient(
+  stdioCommand: string,
   stdin: NodeJS.ReadableStream,
   stdout: NodeJS.WritableStream,
   options?: Agent44ProxyClientOptions,
+): Agent44ProxyClient;
+export function createAgent44ProxyClient(
+  stdioCommand: string,
+  stdinOrOptions?: NodeJS.ReadableStream | Agent44ProxyClientOptions,
+  stdout?: NodeJS.WritableStream,
+  options?: Agent44ProxyClientOptions,
 ): Agent44ProxyClient {
-  return new Agent44ProxyClient(stdioCommand, stdin, stdout, options);
+  if (stdout !== undefined || isStream(stdinOrOptions)) {
+    return new Agent44ProxyClient(
+      stdioCommand,
+      stdinOrOptions as NodeJS.ReadableStream,
+      stdout as NodeJS.WritableStream,
+      options,
+    );
+  }
+  return new Agent44ProxyClient(
+    stdioCommand,
+    stdinOrOptions as Agent44ProxyClientOptions | undefined,
+  );
 }
