@@ -61,7 +61,7 @@ The package identity is `@imrohit44/agent44-ts-client`. Version `0.3.0` is
 published on npm. For consumer-facing examples and limitations, see the
 [TypeScript package README](../typescript/README.md), the
 [npm package](https://www.npmjs.com/package/@imrohit44/agent44-ts-client),
-and [GitHub v0.3.0 release](https://github.com/imrohit44/Agent44/releases/tag/v0.3.0).
+and [GitHub v0.3.0 release](https://github.com/imrohit44/agent44/releases/tag/v0.3.0).
 
 The package is ESM-only. `npm run build` emits `dist/index.js` and
 `dist/index.d.ts`; the package manifest's `main`, `module`, `types`, and

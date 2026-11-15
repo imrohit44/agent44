@@ -32,7 +32,7 @@ npm install @imrohit44/agent44-ts-client
 ```
 
 See the [npm package](https://www.npmjs.com/package/@imrohit44/agent44-ts-client)
-and [GitHub v0.3.0 release](https://github.com/imrohit44/Agent44/releases/tag/v0.3.0).
+and [GitHub v0.3.0 release](https://github.com/imrohit44/agent44/releases/tag/v0.3.0).
 To pin the current version, use
 `npm install @imrohit44/agent44-ts-client@0.3.0`.
 
@@ -168,8 +168,8 @@ same operation. If transport cleanup fails, the client remains `FAILED`,
 `cleanup()` rejects with `CLEANUP_FAILED` and the original cause, and a later
 cleanup call can retry. Always await cleanup in a `finally` block.
 
-**Process shutdown:** `close()` delegates transport shutdown to the underlying
-MCP SDK. For stdio transports, process termination is best-effort; successful
+**Process shutdown:** `cleanup()` delegates transport shutdown to the underlying
+MCP SDK's `close()` method. For stdio transports, process termination is best-effort; successful
 cleanup does not independently guarantee that the child process has exited.
 Applications requiring strict process-exit confirmation should monitor the
 child process separately.
@@ -204,8 +204,8 @@ or production safety behavior is established.
 
 ## Release history
 
-- [v0.3.0 — TypeScript SDK reliability](https://github.com/imrohit44/Agent44/releases/tag/v0.3.0)
-- [v0.2.0 — MCP stdio transport integration](https://github.com/imrohit44/Agent44/releases/tag/v0.2.0)
+- [v0.3.0 — TypeScript SDK reliability](https://github.com/imrohit44/agent44/releases/tag/v0.3.0)
+- [v0.2.0 — MCP stdio transport integration](https://github.com/imrohit44/agent44/releases/tag/v0.2.0)
 - See the [changelog](CHANGELOG.md) for the current release summary.
 
 ## License
@@ -214,7 +214,7 @@ Apache-2.0. See the [LICENSE](./LICENSE) file.
 
 ## Project links
 
-- [Agent44 repository](https://github.com/imrohit44/Agent44)
-- [Issues](https://github.com/imrohit44/Agent44/issues)
-- [TypeScript client documentation](https://github.com/imrohit44/Agent44/blob/main/docs/typescript-client.md)
-- [Project README](https://github.com/imrohit44/Agent44/blob/main/README.md)
+- [Agent44 repository](https://github.com/imrohit44/agent44)
+- [Issues](https://github.com/imrohit44/agent44/issues)
+- [TypeScript client documentation](https://github.com/imrohit44/agent44/blob/main/docs/typescript-client.md)
+- [Project README](https://github.com/imrohit44/agent44/blob/main/README.md)
