@@ -142,6 +142,7 @@ export interface Agent44ProxyClientOptions {
   env?: Record<string, string | undefined>;
   connectionTimeoutMs?: number;
   requestTimeoutMs?: number;
+  onStateChange?: (state: Agent44ClientState) => void;
 }
 
 export interface ConnectOptions {
@@ -229,11 +230,21 @@ function isStream(value: unknown): boolean {
   );
 }
 
+if (typeof Symbol !== 'undefined' && !(Symbol as { asyncDispose?: symbol }).asyncDispose) {
+  Object.defineProperty(Symbol, 'asyncDispose', {
+    value: Symbol.for('Symbol.asyncDispose'),
+    configurable: true,
+    enumerable: false,
+    writable: true,
+  });
+}
+
 export class Agent44ProxyClient {
   private readonly client: Client;
   private readonly transport: StdioClientTransport;
   private readonly connectionTimeoutMs: number;
   private readonly requestTimeoutMs: number;
+  private readonly onStateChange?: (state: Agent44ClientState) => void;
   private connection: Promise<void> | undefined;
   private transportClose: Promise<void> | undefined;
   private closeOperation: Promise<void> | undefined;
@@ -270,6 +281,7 @@ export class Agent44ProxyClient {
       resolvedOptions.connectionTimeoutMs ?? DEFAULT_CONNECTION_TIMEOUT_MS;
     this.requestTimeoutMs =
       resolvedOptions.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MSEC;
+    this.onStateChange = resolvedOptions.onStateChange;
     validateTimeout(this.connectionTimeoutMs, 'connectionTimeoutMs');
     validateTimeout(this.requestTimeoutMs, 'requestTimeoutMs');
 
@@ -281,28 +293,28 @@ export class Agent44ProxyClient {
     });
     this.client = new Client({
       name: '@imrohit44/agent44-ts-client',
-      version: '0.3.0',
+      version: '0.4.0',
     });
     this.client.onerror = (error) => {
       if (this.stateValue === 'CONNECTING') {
-        this.stateValue = 'FAILED';
         this.terminalError = this.createError(
           'CONNECTION_FAILED',
           `The MCP server failed during connection: ${errorMessage(error)}`,
           { operation: 'connect', cause: error },
         );
+        this.setState('FAILED');
       }
     };
     this.client.onclose = () => {
       if (this.stateValue === 'CONNECTED') {
         this.failForServerExit();
       } else if (this.stateValue === 'CONNECTING') {
-        this.stateValue = 'FAILED';
         this.terminalError ??= this.createError(
           'CONNECTION_FAILED',
           'The MCP server closed before connection initialization completed',
           { operation: 'connect' },
         );
+        this.setState('FAILED');
       }
     };
   }
@@ -339,7 +351,7 @@ export class Agent44ProxyClient {
       return Promise.reject(this.clientClosedError('connect'));
     }
 
-    this.stateValue = 'CONNECTING';
+    this.setState('CONNECTING');
     this.connectionAbortKind = undefined;
     this.connectionAbortReason = undefined;
     const controller = new AbortController();
@@ -372,15 +384,15 @@ export class Agent44ProxyClient {
           }
           throw this.connectionAbortError();
         }
-        this.stateValue = 'CONNECTED';
+        this.setState('CONNECTED');
       });
 
     this.connection = Promise.race([startup, aborted])
       .catch(async (error: unknown) => {
         const connectionError = this.asConnectionError(error);
         if (this.stateValue !== 'CLOSING' && this.stateValue !== 'CLOSED') {
-          this.stateValue = 'FAILED';
           this.terminalError = connectionError;
+          this.setState('FAILED');
         }
         if (this.stateValue === 'CLOSING' || this.stateValue === 'CLOSED') {
           throw connectionError;
@@ -599,7 +611,7 @@ export class Agent44ProxyClient {
       return Promise.resolve();
     }
 
-    this.stateValue = 'CLOSING';
+    this.setState('CLOSING');
     const closedError = this.clientClosedError('cleanup');
     for (const controller of this.pendingRequests) {
       controller.abort(closedError);
@@ -616,15 +628,15 @@ export class Agent44ProxyClient {
       }
       try {
         await this.closeTransport();
-        this.stateValue = 'CLOSED';
+        this.setState('CLOSED');
       } catch (error) {
-        this.stateValue = 'FAILED';
         const cleanupError = this.createError(
           'CLEANUP_FAILED',
           'Failed to close the MCP client transport',
           { operation: 'cleanup', cause: error },
         );
         this.terminalError = cleanupError;
+        this.setState('FAILED');
         throw cleanupError;
       }
     })();
@@ -637,6 +649,10 @@ export class Agent44ProxyClient {
     });
 
     return operation;
+  }
+
+  [Symbol.asyncDispose](): Promise<void> {
+    return this.cleanup();
   }
 
   private async ensureConnected(signal?: AbortSignal): Promise<void> {
@@ -846,13 +862,30 @@ export class Agent44ProxyClient {
     );
   }
 
+  private setState(newState: Agent44ClientState): void {
+    if (this.stateValue === newState) {
+      return;
+    }
+    this.stateValue = newState;
+    if (this.onStateChange) {
+      try {
+        const result = this.onStateChange(newState) as unknown;
+        if (result && typeof (result as Promise<unknown>).catch === 'function') {
+          (result as Promise<unknown>).catch(() => { });
+        }
+      } catch {
+        // Prevent callback exceptions from corrupting client lifecycle behavior
+      }
+    }
+  }
+
   private failForServerExit(cause?: unknown): void {
-    this.stateValue = 'FAILED';
     this.terminalError = this.createError(
       'SERVER_EXITED',
       'The MCP server process exited unexpectedly',
       { operation: 'connection', cause },
     );
+    this.setState('FAILED');
   }
 
   private clientClosedError(

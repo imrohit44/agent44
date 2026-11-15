@@ -247,28 +247,27 @@ npm install @imrohit44/agent44-ts-client
 From the repository root, the following minimal example launches the Python
 proxy and its demo server through stdio:
 
-```js
+```ts
 import { createAgent44ProxyClient } from "@imrohit44/agent44-ts-client";
 
-const client = createAgent44ProxyClient(
-  "python",
-  process.stdin,
-  process.stdout,
-  {
-    args: [
-      "-m", "agent44.proxy",
-      "--policy", "evaluation/demo.yaml",
-      "--",
-      "python", "-m", "agent44.demo_server",
-    ],
-    cwd: process.cwd(),
-  },
-);
+const client = createAgent44ProxyClient("python", {
+  args: [
+    "-m", "agent44.proxy",
+    "--policy", "evaluation/demo.yaml",
+    "--",
+    "python", "-m", "agent44.demo_server",
+  ],
+  cwd: process.cwd(),
+});
 
 try {
   await client.connect();
   const result = await client.callTool("add", { a: 2, b: 3 });
-  console.log(result.text);
+  if (result.success) {
+    console.log("Result:", result.text);
+  } else {
+    console.error("Denied or failed:", result.error);
+  }
 } finally {
   await client.cleanup();
 }
