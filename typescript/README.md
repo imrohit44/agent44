@@ -2,7 +2,7 @@
 
 The Agent44 TypeScript Client (`@imrohit44/agent44-ts-client`) is an ESM client library for interacting with Model Context Protocol (MCP) servers and the Agent44 proxy over stdio. It provides typed tool invocation, provenance metadata propagation, configurable timeouts, cancellation support, state observability, async disposal, and a strict fail-closed lifecycle.
 
-**Release status:** `v0.3.0` is published on npm. The API remains under active evolution as an experimental developer interface.
+**Release status:** Candidate version `v0.4.0` prepared. Version `v0.3.0` is the preceding published npm release. The API remains under active evolution as an experimental developer interface.
 
 ---
 
@@ -10,7 +10,7 @@ The Agent44 TypeScript Client (`@imrohit44/agent44-ts-client`) is an ESM client 
 
 - **Node.js:** `>=18.0.0`
 - **Module format:** ESM-only (`"type": "module"` in `package.json`)
-- **TypeScript (optional):** TypeScript `>=5.0` recommended (TypeScript `>=5.2` for native `await using` syntax)
+- **TypeScript (optional):** TypeScript `>=5.0` recommended (TypeScript `>=5.2` for native `await using` syntax). For strict TypeScript consumers (`skipLibCheck: false`), `@types/node` is recommended in `devDependencies` to provide ambient Node.js stream declarations.
 
 ---
 
@@ -20,10 +20,10 @@ The Agent44 TypeScript Client (`@imrohit44/agent44-ts-client`) is an ESM client 
 npm install @imrohit44/agent44-ts-client
 ```
 
-To pin the exact published version:
+To pin the exact version:
 
 ```sh
-npm install @imrohit44/agent44-ts-client@0.3.0
+npm install @imrohit44/agent44-ts-client@0.4.0
 ```
 
 ---

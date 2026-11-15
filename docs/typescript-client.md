@@ -1,6 +1,6 @@
 # TypeScript Client
 
-The checked-out `typescript/client/index.ts` implements an experimental MCP stdio client wrapper. Version `0.3.0` includes lifecycle, cancellation, state observability, complete MCP content preservation, discriminated union result typing, and async disposal improvements.
+The checked-out `typescript/client/index.ts` implements an experimental MCP stdio client wrapper. Version `0.4.0` (candidate) includes lifecycle, cancellation, state observability, complete MCP content preservation, discriminated union result typing, and async disposal improvements.
 
 The repository's integration test launches the Python Agent44 proxy and a local deterministic MCP server.
 
