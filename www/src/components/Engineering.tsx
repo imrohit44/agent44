@@ -33,9 +33,9 @@ const evidence = [
     result: "0.3.0 published",
     scope:
       "Published ESM package with stdio MCP transport, lifecycle states, timeout controls, and cancellation support; this is a release fact, not an assurance level.",
-    source: "npm registry; GitHub v0.3.0 release publication remains pending.",
+    source: "npm registry; GitHub release v0.3.0.",
     sourceHref:
-      "https://www.npmjs.com/package/@imrohit44/agent44-ts-client",
+      "https://github.com/imrohit44/agent44/releases/tag/v0.3.0",
   },
   {
     subject: "Previous TypeScript package",
@@ -44,7 +44,7 @@ const evidence = [
       "Preceding published release that introduced the MCP stdio transport integration.",
     source: "GitHub release v0.2.0.",
     sourceHref:
-      "https://github.com/imrohit44/Agent44/releases/tag/v0.2.0",
+      "https://github.com/imrohit44/agent44/releases/tag/v0.2.0",
   },
 ];
 
@@ -344,7 +344,7 @@ export default function Engineering() {
           <a href="https://github.com/imrohit44/Agent44/blob/main/docs/provenance.md">
             Provenance guide <span aria-hidden="true">↗</span>
           </a>
-          <a href="https://github.com/imrohit44/Agent44/releases/tag/v0.3.0">
+          <a href="https://github.com/imrohit44/agent44/releases/tag/v0.3.0">
             TypeScript v0.3.0 release <span aria-hidden="true">↗</span>
           </a>
           <a href="https://github.com/imrohit44/Agent44/blob/main/typescript/CHANGELOG.md">

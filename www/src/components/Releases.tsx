@@ -24,6 +24,11 @@ const releaseLinks = [
     label: "Changelog",
     detail: "SDK release history",
   },
+  {
+    href: "https://github.com/imrohit44/agent44/releases/tag/v0.2.0",
+    label: "Historical release",
+    detail: "Agent44 TypeScript Client v0.2.0",
+  },
 ];
 
 export default function Releases() {

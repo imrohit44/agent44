@@ -25,10 +25,10 @@ downstream tool termination, and stdio cleanup does not independently confirm
 child-process exit.
 
 - **Install:** `npm install @imrohit44/agent44-ts-client`
-- **Release notes:** [Agent44 TypeScript SDK v0.3.0](https://github.com/imrohit44/Agent44/releases/tag/v0.3.0)
+- **Release notes:** [Agent44 TypeScript SDK v0.3.0](https://github.com/imrohit44/agent44/releases/tag/v0.3.0)
 - **Changelog:** [TypeScript SDK release history](typescript/CHANGELOG.md)
 - **Project:** [GitHub](https://github.com/imrohit44/agent44) · [Website](https://agent44-nu.vercel.app/) · [TypeScript SDK guide](docs/typescript-client.md)
-- **History:** [v0.2.0 release](https://github.com/imrohit44/Agent44/releases/tag/v0.2.0) remains the historical stdio transport integration release.
+- **History:** [v0.2.0 release](https://github.com/imrohit44/agent44/releases/tag/v0.2.0) remains the historical stdio transport integration release.
 
 ## Repository layout
 
@@ -134,7 +134,7 @@ status.
   Its real stdio integration has been exercised through the Python proxy.
   Install with `npm install @imrohit44/agent44-ts-client`; see the
   [TypeScript Client guide](docs/typescript-client.md), [npm package](https://www.npmjs.com/package/@imrohit44/agent44-ts-client),
-  and [v0.3.0 GitHub release](https://github.com/imrohit44/Agent44/releases/tag/v0.3.0).
+  and [v0.3.0 GitHub release](https://github.com/imrohit44/agent44/releases/tag/v0.3.0).
 
 ## Quickstart
 
@@ -324,7 +324,7 @@ for definitions and limits.
   repository README and SDK documentation have been corrected. No new npm
   version is being published for this synchronization.
   See the [npm package](https://www.npmjs.com/package/@imrohit44/agent44-ts-client)
-  and [v0.3.0 GitHub release](https://github.com/imrohit44/Agent44/releases/tag/v0.3.0).
+  and [v0.3.0 GitHub release](https://github.com/imrohit44/agent44/releases/tag/v0.3.0).
 - **Console command:** `agent44` provides `init`, `validate`, `run`, and
   `inspect` commands. `agent44 run` delegates proxy options and the downstream
   server command to the existing proxy entry point. The module-based proxy

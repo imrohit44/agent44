@@ -160,8 +160,8 @@ export default function Journey() {
           />
           <p className="journey-date-note">
             Dates are shown as calendar dates. Commit dates come from Git
-            history; package dates come from npm registry metadata; the v0.2.0
-            GitHub release publication date comes from GitHub Releases.
+            history; package dates come from npm registry metadata; GitHub
+            release publication dates come from GitHub Releases.
           </p>
         </div>
       </section>
