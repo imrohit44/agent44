@@ -741,8 +741,271 @@ async function testInitializationAndConfiguration(): Promise<void> {
   assert.throws(() => resolveTimeoutPrecedence(undefined, 'NaN', 30000, 'conn'), RangeError);
 }
 
+async function testToolResultsAndParameterHandling(): Promise<void> {
+  const clients: Agent44ProxyClient[] = [];
+  const register = (client: Agent44ProxyClient) => clients.push(client);
+
+  try {
+    const { client, mcp } = createControlledClient(register);
+
+    // 1. Multiple text content blocks
+    mcp.callTool = async () => ({
+      content: [
+        { type: 'text' as const, text: 'First block' },
+        { type: 'text' as const, text: 'Second block' },
+        { type: 'text' as const, text: 'Third block' },
+      ],
+      isError: false,
+    });
+    const multiTextResult = await client.callTool('multi_text', {});
+    assert.equal(multiTextResult.success, true);
+    assert.equal(multiTextResult.error, null);
+    assert.equal(multiTextResult.text, 'First block', 'text must be derived from the first text block');
+    assert.equal(multiTextResult.content?.length, 3);
+    assert.deepEqual(multiTextResult.content, [
+      { type: 'text', text: 'First block' },
+      { type: 'text', text: 'Second block' },
+      { type: 'text', text: 'Third block' },
+    ]);
+
+    // 2. Image content blocks
+    const pngData = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    mcp.callTool = async () => ({
+      content: [
+        { type: 'image' as const, data: pngData, mimeType: 'image/png' },
+      ],
+      isError: false,
+    });
+    const imageResult = await client.callTool('chart_generator', {});
+    assert.equal(imageResult.success, true);
+    assert.equal(imageResult.error, null);
+    assert.equal(imageResult.text, null, 'text must be null when no text block is present');
+    assert.equal(imageResult.content?.length, 1);
+    assert.deepEqual(imageResult.content?.[0], {
+      type: 'image',
+      data: pngData,
+      mimeType: 'image/png',
+    });
+
+    // 3. Embedded resource content blocks
+    mcp.callTool = async () => ({
+      content: [
+        {
+          type: 'resource' as const,
+          resource: {
+            uri: 'file:///workspace/data.json',
+            text: '{"status":"ok"}',
+            mimeType: 'application/json',
+          },
+        },
+      ],
+      isError: false,
+    });
+    const resourceResult = await client.callTool('get_resource', {});
+    assert.equal(resourceResult.success, true);
+    assert.equal(resourceResult.error, null);
+    assert.equal(resourceResult.text, null);
+    assert.equal(resourceResult.content?.length, 1);
+    assert.equal(resourceResult.content?.[0].type, 'resource');
+
+    // 4. Mixed content arrays and ordering
+    const mixedArray = [
+      { type: 'image' as const, data: pngData, mimeType: 'image/png' },
+      { type: 'text' as const, text: 'Image caption block' },
+      {
+        type: 'resource' as const,
+        resource: {
+          uri: 'file:///workspace/data.txt',
+          text: 'Resource payload',
+          mimeType: 'text/plain',
+        },
+      },
+      { type: 'text' as const, text: 'Follow-up explanation block' },
+    ];
+    mcp.callTool = async () => ({
+      content: mixedArray,
+      isError: false,
+    });
+    const mixedResult = await client.callTool('mixed_output', {});
+    assert.equal(mixedResult.success, true);
+    assert.equal(mixedResult.error, null);
+    assert.equal(mixedResult.text, 'Image caption block', 'text derives from first text block even if preceded by image');
+    assert.equal(mixedResult.content?.length, 4);
+    assert.deepEqual(mixedResult.content, mixedArray, 'preserves exact content blocks in original order');
+
+    // 5. Empty options `{}`
+    let capturedParams: unknown;
+    mcp.callTool = async (params: unknown) => {
+      capturedParams = params;
+      return { content: [{ type: 'text', text: 'ok' }] };
+    };
+    const emptyOptsResult = await client.callTool('echo', { msg: 'test' }, {});
+    assert.equal(emptyOptsResult.success, true);
+    assert.equal(emptyOptsResult.text, 'ok');
+
+    // 6. RequestOptions with AbortSignal
+    const abortCtrl = new AbortController();
+    const abortableCall = client.callTool('echo', { msg: 'test' }, { signal: abortCtrl.signal });
+    const abortRes = await abortableCall;
+    assert.equal(abortRes.success, true);
+
+    const alreadyAborted = new AbortController();
+    alreadyAborted.abort(new Error('Pre-aborted'));
+    await assert.rejects(
+      client.callTool('echo', {}, { signal: alreadyAborted.signal }),
+      (err: unknown) => {
+        assert.ok(isAgent44ClientError(err));
+        assert.equal(err.code, 'REQUEST_CANCELLED');
+        return true;
+      },
+    );
+
+    // 7. RequestOptions with timeoutMs
+    const timeoutResult = await client.callTool('echo', { msg: 'timed' }, { timeoutMs: 10_000 });
+    assert.equal(timeoutResult.success, true);
+
+    // 8. Valid provenance references (positional 3-arg, positional 4-arg, and options-object)
+    const ref1: ProvenanceReference = { id: 'ref-1', sourceTool: 'tool-origin' };
+    await client.callTool('echo', {}, ref1);
+    assert.deepEqual(
+      (capturedParams as { _meta?: { provenanceReference?: unknown } })._meta?.provenanceReference,
+      ref1,
+    );
+
+    const ref2: ProvenanceReference = { id: 'ref-2', sourceTool: 'tool-origin' };
+    await client.callTool('echo', {}, ref2, { timeoutMs: 5000 });
+    assert.deepEqual(
+      (capturedParams as { _meta?: { provenanceReference?: unknown } })._meta?.provenanceReference,
+      ref2,
+    );
+
+    const ref3: ProvenanceReference = { id: 'ref-3', sourceTool: 'tool-origin' };
+    await client.callTool('echo', {}, { provenance: ref3, timeoutMs: 5000 });
+    assert.deepEqual(
+      (capturedParams as { _meta?: { provenanceReference?: unknown } })._meta?.provenanceReference,
+      ref3,
+    );
+
+    // 9. Malformed provenance-like objects
+    await assert.rejects(
+      client.callTool('echo', {}, { id: 'only-id' } as any),
+      (err: unknown) => {
+        assert.ok(isAgent44ClientError(err));
+        assert.equal(err.code, 'REQUEST_FAILED');
+        assert.match(err.message, /invalid provenance reference/i);
+        return true;
+      },
+    );
+
+    await assert.rejects(
+      client.callTool('echo', {}, { sourceTool: 'only-source' } as any),
+      (err: unknown) => {
+        assert.ok(isAgent44ClientError(err));
+        assert.equal(err.code, 'REQUEST_FAILED');
+        return true;
+      },
+    );
+
+    await assert.rejects(
+      client.callTool('echo', {}, { id: 1234, sourceTool: 'echo' } as any),
+      (err: unknown) => {
+        assert.ok(isAgent44ClientError(err));
+        assert.equal(err.code, 'REQUEST_FAILED');
+        return true;
+      },
+    );
+
+    await assert.rejects(
+      client.callTool('echo', {}, { id: 'ref', sourceTool: null } as any),
+      (err: unknown) => {
+        assert.ok(isAgent44ClientError(err));
+        assert.equal(err.code, 'REQUEST_FAILED');
+        return true;
+      },
+    );
+
+    await assert.rejects(
+      client.callTool('echo', {}, { id: 'only-id' } as any, { timeoutMs: 1000 }),
+      (err: unknown) => {
+        assert.ok(isAgent44ClientError(err));
+        assert.equal(err.code, 'REQUEST_FAILED');
+        return true;
+      },
+    );
+
+    await assert.rejects(
+      client.callTool('echo', {}, { provenance: { id: 'only-id' } as any }),
+      (err: unknown) => {
+        assert.ok(isAgent44ClientError(err));
+        assert.equal(err.code, 'REQUEST_FAILED');
+        return true;
+      },
+    );
+
+    // 10. Ordinary tool arguments containing signal or timeoutMs keys
+    const businessArgsWithTrickyKeys = {
+      signal: 'SIGUSR1',
+      timeoutMs: 12345,
+      action: 'run_task',
+    };
+    await client.callTool('manage_process', businessArgsWithTrickyKeys, { timeoutMs: 5000 });
+    const forwardArgs = (capturedParams as { arguments?: unknown }).arguments;
+    assert.deepEqual(forwardArgs, businessArgsWithTrickyKeys, 'business arguments must not be mistaken for options');
+
+    // 11. Existing policy denials and tool execution failures
+    mcp.callTool = async () => ({
+      content: [{ type: 'text', text: 'Agent44 policy denial: rule deny-eval violated' }],
+      isError: true,
+    });
+    const policyDenial = await client.callTool('restricted', { eval: true });
+    assert.equal(policyDenial.success, false);
+    assert.equal(policyDenial.text, 'Agent44 policy denial: rule deny-eval violated');
+    assert.equal(policyDenial.error, 'Agent44 policy denial: rule deny-eval violated');
+    assert.equal(policyDenial.content?.length, 1);
+    assert.deepEqual(policyDenial.content, [
+      { type: 'text', text: 'Agent44 policy denial: rule deny-eval violated' },
+    ]);
+
+    mcp.callTool = async () => ({
+      content: [],
+      isError: true,
+    });
+    const emptyErrorResult = await client.callTool('failing_tool', {});
+    assert.equal(emptyErrorResult.success, false);
+    assert.equal(emptyErrorResult.text, null);
+    assert.equal(emptyErrorResult.error, 'Tool call failed');
+    assert.deepEqual(emptyErrorResult.content, []);
+
+    // 12. Existing callTool overloads
+    mcp.callTool = async () => ({ content: [{ type: 'text', text: 'overload2' }] });
+    const ov2 = await client.callTool('ov', { a: 1 });
+    assert.equal(ov2.success, true);
+    assert.equal(ov2.text, 'overload2');
+
+    mcp.callTool = async () => ({ content: [{ type: 'text', text: 'overload3-opt' }] });
+    const ov3Opt = await client.callTool('ov', { a: 1 }, { timeoutMs: 4000 });
+    assert.equal(ov3Opt.success, true);
+    assert.equal(ov3Opt.text, 'overload3-opt');
+
+    mcp.callTool = async () => ({ content: [{ type: 'text', text: 'overload3-prov' }] });
+    const ov3Prov = await client.callTool('ov', { a: 1 }, { id: 'p', sourceTool: 's' });
+    assert.equal(ov3Prov.success, true);
+    assert.equal(ov3Prov.text, 'overload3-prov');
+
+    mcp.callTool = async () => ({ content: [{ type: 'text', text: 'overload4' }] });
+    const ov4 = await client.callTool('ov', { a: 1 }, { id: 'p', sourceTool: 's' }, { timeoutMs: 4000 });
+    assert.equal(ov4.success, true);
+    assert.equal(ov4.text, 'overload4');
+  } finally {
+    for (const c of clients) {
+      await c.cleanup();
+    }
+  }
+}
+
 await testPublicShapesAndProvenance();
 await testReliabilityBehavior();
 await testTypeSafetyAndExports();
 await testInitializationAndConfiguration();
+await testToolResultsAndParameterHandling();
 console.log('TypeScript client reliability and type-safety tests passed.');

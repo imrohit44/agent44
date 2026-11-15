@@ -34,6 +34,7 @@ export interface SuccessfulToolCallResult {
   success: true;
   text: string | null;
   error: null;
+  content?: MCPCallToolResult['content'];
   provenance?: ProvenanceReference;
 }
 
@@ -41,6 +42,7 @@ export interface FailedToolCallResult {
   success: false;
   text: string | null;
   error: string;
+  content?: MCPCallToolResult['content'];
   provenance?: ProvenanceReference;
 }
 
@@ -149,6 +151,7 @@ export interface ConnectOptions {
 export interface RequestOptions {
   signal?: AbortSignal;
   timeoutMs?: number;
+  provenance?: ProvenanceReference;
 }
 
 const DEFAULT_CONNECTION_TIMEOUT_MS = 30_000;
@@ -180,10 +183,17 @@ function isProvenanceReference(value: unknown): value is ProvenanceReference {
   }
   return (
     'id' in value
-    && typeof value.id === 'string'
+    && typeof (value as { id: unknown }).id === 'string'
     && 'sourceTool' in value
-    && typeof value.sourceTool === 'string'
+    && typeof (value as { sourceTool: unknown }).sourceTool === 'string'
   );
+}
+
+function isProvenanceLike(value: unknown): boolean {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  return 'id' in value || 'sourceTool' in value;
 }
 
 function isRequestOptions(value: unknown): value is RequestOptions {
@@ -191,7 +201,7 @@ function isRequestOptions(value: unknown): value is RequestOptions {
     typeof value === 'object'
     && value !== null
     && !isProvenanceReference(value)
-    && ('signal' in value || 'timeoutMs' in value)
+    && !isProvenanceLike(value)
   );
 }
 
@@ -257,9 +267,9 @@ export class Agent44ProxyClient {
         : (stdinOrOptions as Agent44ProxyClientOptions | undefined) ?? {}
     );
     this.connectionTimeoutMs =
-    resolvedOptions.connectionTimeoutMs ?? DEFAULT_CONNECTION_TIMEOUT_MS;
+      resolvedOptions.connectionTimeoutMs ?? DEFAULT_CONNECTION_TIMEOUT_MS;
     this.requestTimeoutMs =
-    resolvedOptions.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MSEC;
+      resolvedOptions.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MSEC;
     validateTimeout(this.connectionTimeoutMs, 'connectionTimeoutMs');
     validateTimeout(this.requestTimeoutMs, 'requestTimeoutMs');
 
@@ -438,12 +448,73 @@ export class Agent44ProxyClient {
     provenanceOrOptions?: ProvenanceReference | RequestOptions,
     requestOptions?: RequestOptions,
   ): Promise<ToolCallResult> {
-    const provenance = isProvenanceReference(provenanceOrOptions)
-      ? provenanceOrOptions
-      : undefined;
-    const options = isRequestOptions(provenanceOrOptions)
-      ? provenanceOrOptions
-      : requestOptions ?? {};
+    let provenance: ProvenanceReference | undefined;
+    let options: RequestOptions;
+
+    if (requestOptions !== undefined) {
+      if (provenanceOrOptions !== undefined) {
+        if (!isProvenanceReference(provenanceOrOptions)) {
+          throw this.createError(
+            'REQUEST_FAILED',
+            `Invalid provenance reference for tool "${toolName}": expected an object with string "id" and string "sourceTool"`,
+            { operation: 'callTool', toolName },
+          );
+        }
+        provenance = provenanceOrOptions;
+      }
+      if (typeof requestOptions !== 'object' || requestOptions === null) {
+        throw this.createError(
+          'REQUEST_FAILED',
+          `Invalid request options for tool "${toolName}": expected an options object`,
+          { operation: 'callTool', toolName },
+        );
+      }
+      options = requestOptions;
+      if (options.provenance !== undefined) {
+        if (!isProvenanceReference(options.provenance)) {
+          throw this.createError(
+            'REQUEST_FAILED',
+            `Invalid provenance reference in options for tool "${toolName}": expected an object with string "id" and string "sourceTool"`,
+            { operation: 'callTool', toolName },
+          );
+        }
+        provenance = options.provenance;
+      }
+    } else if (provenanceOrOptions !== undefined) {
+      if (typeof provenanceOrOptions !== 'object' || provenanceOrOptions === null) {
+        throw this.createError(
+          'REQUEST_FAILED',
+          `Invalid parameter for tool "${toolName}": expected a provenance reference or options object`,
+          { operation: 'callTool', toolName },
+        );
+      }
+
+      if (isProvenanceReference(provenanceOrOptions)) {
+        provenance = provenanceOrOptions;
+        options = {};
+      } else if (isProvenanceLike(provenanceOrOptions)) {
+        throw this.createError(
+          'REQUEST_FAILED',
+          `Invalid provenance reference for tool "${toolName}": expected an object with string "id" and string "sourceTool"`,
+          { operation: 'callTool', toolName },
+        );
+      } else {
+        options = provenanceOrOptions as RequestOptions;
+        if (options.provenance !== undefined) {
+          if (!isProvenanceReference(options.provenance)) {
+            throw this.createError(
+              'REQUEST_FAILED',
+              `Invalid provenance reference in options for tool "${toolName}": expected an object with string "id" and string "sourceTool"`,
+              { operation: 'callTool', toolName },
+            );
+          }
+          provenance = options.provenance;
+        }
+      }
+    } else {
+      options = {};
+    }
+
     validateTimeout(options.timeoutMs ?? this.requestTimeoutMs, 'timeoutMs');
 
     if (options.signal?.aborted) {
@@ -491,15 +562,16 @@ export class Agent44ProxyClient {
     }
 
     const extractedProvenance = this.extractProvenance(response);
-    const text =
-      response.content?.[0]?.type === 'text'
-        ? response.content[0].text
-        : null;
+    const firstTextBlock = response.content?.find(
+      (item): item is { type: 'text'; text: string } => item.type === 'text',
+    );
+    const text = firstTextBlock ? firstTextBlock.text : null;
     if (response.isError) {
       return {
         success: false,
         text,
         error: text ?? 'Tool call failed',
+        content: response.content,
         provenance: extractedProvenance,
       };
     }
@@ -507,6 +579,7 @@ export class Agent44ProxyClient {
       success: true,
       text,
       error: null,
+      content: response.content,
       provenance: extractedProvenance,
     };
   }
