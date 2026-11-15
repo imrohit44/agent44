@@ -8,6 +8,7 @@ import {
   Agent44ProxyClient,
   createAgent44ProxyClient,
   isAgent44ClientError,
+  type Agent44ClientState,
   type CallToolResult,
   type FailedToolCallResult,
   type MCPCallToolResult,
@@ -1003,9 +1004,160 @@ async function testToolResultsAndParameterHandling(): Promise<void> {
   }
 }
 
+async function testLifecycleAndObservability(): Promise<void> {
+  const clients: Agent44ProxyClient[] = [];
+  const register = (client: Agent44ProxyClient) => clients.push(client);
+
+  try {
+    // 1. Async disposal invokes cleanup
+    {
+      const { client } = createControlledClient(register);
+      await client.connect();
+      assert.equal(client.state, 'CONNECTED');
+      await client[Symbol.asyncDispose]();
+      assert.equal(client.state, 'CLOSED');
+      await assert.rejects(
+        async () => client.callTool('any_tool', {}),
+        (err: unknown) => isAgent44ClientError(err) && err.code === 'CLIENT_CLOSED',
+      );
+    }
+
+    // 2. Repeated disposal remains safe
+    {
+      const { client, mcp } = createControlledClient(register);
+      let closeCalls = 0;
+      mcp.close = async () => {
+        closeCalls += 1;
+      };
+      await client.connect();
+      await client[Symbol.asyncDispose]();
+      assert.equal(client.state, 'CLOSED');
+      assert.equal(closeCalls, 1);
+
+      // Subsequent asyncDispose or cleanup is a safe no-op
+      await client[Symbol.asyncDispose]();
+      await client.cleanup();
+      assert.equal(client.state, 'CLOSED');
+      assert.equal(closeCalls, 1, 'underlying transport close is not called repeatedly after CLOSED');
+    }
+
+    // 3. Cleanup failure preserves existing retry behavior
+    {
+      const { client, mcp } = createControlledClient(register);
+      await client.connect();
+      let closeAttempts = 0;
+      mcp.close = async () => {
+        closeAttempts += 1;
+        if (closeAttempts === 1) {
+          throw new Error('Teardown socket failed');
+        }
+      };
+
+      await assert.rejects(
+        async () => client[Symbol.asyncDispose](),
+        (err: unknown) => isAgent44ClientError(err) && err.code === 'CLEANUP_FAILED',
+      );
+      assert.equal(client.state, 'FAILED');
+      assert.equal(closeAttempts, 1);
+
+      // Retry cleanup via asyncDispose
+      await client[Symbol.asyncDispose]();
+      assert.equal(client.state, 'CLOSED');
+      assert.equal(closeAttempts, 2, 'retry allowed and succeeded');
+    }
+
+    // 4. State callback receives actual transitions
+    {
+      const transitions: Agent44ClientState[] = [];
+      const { client } = createControlledClient(register, {
+        onStateChange: (state) => transitions.push(state),
+      });
+      assert.deepEqual(transitions, [], 'initial state is DISCONNECTED, not an active transition');
+
+      await client.connect();
+      assert.deepEqual(transitions, ['CONNECTING', 'CONNECTED']);
+
+      await client.cleanup();
+      assert.deepEqual(transitions, ['CONNECTING', 'CONNECTED', 'CLOSING', 'CLOSED']);
+    }
+
+    // 5. Duplicate state notifications are not emitted
+    {
+      const transitions: Agent44ClientState[] = [];
+      const { client } = createControlledClient(register, {
+        onStateChange: (state) => transitions.push(state),
+      });
+
+      await client.connect();
+      // Re-calling connect() while connected must not emit CONNECTED again
+      await client.connect();
+      assert.deepEqual(transitions, ['CONNECTING', 'CONNECTED']);
+
+      await client.cleanup();
+      // Re-calling cleanup() while closed must not emit CLOSED again
+      await client.cleanup();
+      await client[Symbol.asyncDispose]();
+      assert.deepEqual(transitions, ['CONNECTING', 'CONNECTED', 'CLOSING', 'CLOSED']);
+    }
+
+    // 6. Asynchronous server exit triggers notification
+    {
+      const transitions: Agent44ClientState[] = [];
+      const { client, mcp } = createControlledClient(register, {
+        onStateChange: (state) => transitions.push(state),
+      });
+
+      await client.connect();
+      assert.deepEqual(transitions, ['CONNECTING', 'CONNECTED']);
+
+      // Downstream server exits unexpectedly
+      mcp.onclose?.();
+      assert.deepEqual(transitions, ['CONNECTING', 'CONNECTED', 'FAILED']);
+      assert.equal(client.state, 'FAILED');
+
+      await assert.rejects(
+        async () => client.callTool('test', {}),
+        (err: unknown) => isAgent44ClientError(err) && err.code === 'SERVER_EXITED',
+      );
+    }
+
+    // 7. Callback exceptions do not break lifecycle operations
+    {
+      // Synchronous exception in callback
+      const { client: syncCrashClient } = createControlledClient(register, {
+        onStateChange: () => {
+          throw new Error('sync callback explosion');
+        },
+      });
+
+      await syncCrashClient.connect();
+      assert.equal(syncCrashClient.state, 'CONNECTED');
+      await syncCrashClient.cleanup();
+      assert.equal(syncCrashClient.state, 'CLOSED');
+
+      // Asynchronous rejection in callback
+      const { client: asyncCrashClient } = createControlledClient(register, {
+        onStateChange: async () => {
+          throw new Error('async callback explosion');
+        },
+      });
+
+      await asyncCrashClient.connect();
+      assert.equal(asyncCrashClient.state, 'CONNECTED');
+      await asyncCrashClient.cleanup();
+      assert.equal(asyncCrashClient.state, 'CLOSED');
+    }
+  } finally {
+    for (const c of clients) {
+      await c.cleanup();
+    }
+  }
+}
+
 await testPublicShapesAndProvenance();
 await testReliabilityBehavior();
 await testTypeSafetyAndExports();
 await testInitializationAndConfiguration();
 await testToolResultsAndParameterHandling();
+await testLifecycleAndObservability();
 console.log('TypeScript client reliability and type-safety tests passed.');
