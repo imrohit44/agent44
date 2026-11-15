@@ -1,15 +1,19 @@
 import assert from 'node:assert/strict';
-import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import {
   ErrorCode,
   McpError,
-  type CallToolResult as MCPCallToolResult,
 } from '@modelcontextprotocol/sdk/types.js';
 import {
   Agent44ClientError,
   Agent44ProxyClient,
   createAgent44ProxyClient,
+  isAgent44ClientError,
+  type CallToolResult,
+  type FailedToolCallResult,
+  type MCPCallToolResult,
   type ProvenanceReference,
+  type SuccessfulToolCallResult,
+  type Tool,
   type ToolCallResult,
 } from './index.js';
 
@@ -48,8 +52,8 @@ function createControlledClient(
     options,
   );
   const mcp = (client as unknown as { client: ControlledMCPClient }).client;
-  mcp.connect = async () => {};
-  mcp.close = async () => {};
+  mcp.connect = async () => { };
+  mcp.close = async () => { };
   mcp.listTools = async () => ({ tools: [] });
   mcp.callTool = async () => ({ content: [{ type: 'text', text: 'ok' }] });
   register(client);
@@ -69,7 +73,7 @@ function withMockConnectionTimeout<T>(
     delay = timeout;
     return 1 as unknown as ReturnType<typeof setTimeout>;
   }) as typeof setTimeout;
-  globalThis.clearTimeout = (() => {}) as typeof clearTimeout;
+  globalThis.clearTimeout = (() => { }) as typeof clearTimeout;
 
   return run(
     () => {
@@ -401,6 +405,344 @@ async function testReliabilityBehavior(): Promise<void> {
   }
 }
 
+async function testTypeSafetyAndExports(): Promise<void> {
+  // 1. MCP type re-exports verification (compile-time & runtime shape)
+  const sampleTool: Tool = {
+    name: 'test-tool',
+    description: 'A test tool re-exported from Agent44',
+    inputSchema: { type: 'object', properties: { q: { type: 'string' } } },
+  };
+  assert.equal(sampleTool.name, 'test-tool');
+
+  const sampleMcpCallResult: MCPCallToolResult = {
+    content: [{ type: 'text', text: 'mcp-content' }],
+    isError: false,
+  };
+  assert.equal(sampleMcpCallResult.content[0].type, 'text');
+
+  const canonicalMcpResult: CallToolResult = sampleMcpCallResult;
+  assert.equal(canonicalMcpResult.isError, false);
+
+  // 2. Successful and failed ToolCallResult type narrowing (compile-time and runtime)
+  const successResult: ToolCallResult = {
+    success: true,
+    text: 'executed successfully',
+    error: null,
+  };
+
+  const failureResult: ToolCallResult = {
+    success: false,
+    text: 'failure message',
+    error: 'failure message',
+  };
+
+  // Compile-time assertion functions verifying type narrowing
+  function assertSuccessfulResult(res: ToolCallResult): { error: null; text: string | null } {
+    if (res.success) {
+      // Must compile: res.error is narrowed to null
+      const narrowedError: null = res.error;
+      const resSpecific: SuccessfulToolCallResult = res;
+      return { error: narrowedError, text: resSpecific.text };
+    }
+    throw new Error('Expected success');
+  }
+
+  function assertFailedResult(res: ToolCallResult): { error: string; text: string | null } {
+    if (!res.success) {
+      // Must compile: res.error is narrowed to string
+      const narrowedError: string = res.error;
+      const resSpecific: FailedToolCallResult = res;
+      return { error: narrowedError, text: resSpecific.text };
+    }
+    throw new Error('Expected failure');
+  }
+
+  const narrowedSuccess = assertSuccessfulResult(successResult);
+  assert.equal(narrowedSuccess.error, null);
+  assert.equal(narrowedSuccess.text, 'executed successfully');
+
+  const narrowedFailure = assertFailedResult(failureResult);
+  assert.equal(narrowedFailure.error, 'failure message');
+  assert.equal(narrowedFailure.text, 'failure message');
+
+  // 3. Consumer-defined argument interfaces without index signatures
+  interface UserSearchQuery {
+    query: string;
+    maxResults?: number;
+    filters: {
+      tags: string[];
+      archived: boolean;
+    };
+  }
+
+  const queryParams: UserSearchQuery = {
+    query: 'security policy',
+    maxResults: 5,
+    filters: {
+      tags: ['audit', 'mcp'],
+      archived: false,
+    },
+  };
+
+  const registeredClients: Agent44ProxyClient[] = [];
+  const { client: typeClient, mcp: typeMcp } = createControlledClient((c) => registeredClients.push(c));
+  let receivedArgs: unknown;
+  typeMcp.callTool = async (params: unknown) => {
+    const callReq = params as { name: string; arguments?: Record<string, unknown> };
+    receivedArgs = callReq.arguments;
+    return {
+      content: [{ type: 'text', text: 'search executed' }],
+    };
+  };
+
+  try {
+    // callTool accepts UserSearchQuery without cast or index signature:
+    const searchRes = await typeClient.callTool('search_docs', queryParams);
+    assert.equal(searchRes.success, true);
+    assert.equal(searchRes.error, null);
+    assert.equal(searchRes.text, 'search executed');
+    assert.deepEqual(receivedArgs, queryParams);
+
+    // Also verify generic specification explicitly:
+    const explicitGenericRes = await typeClient.callTool<UserSearchQuery>('search_docs', queryParams);
+    assert.equal(explicitGenericRes.success, true);
+  } finally {
+    for (const c of registeredClients) {
+      await c.cleanup();
+    }
+  }
+
+  // 4. Valid and invalid inputs to isAgent44ClientError type guard
+  const actualError = new Agent44ClientError({
+    code: 'CONNECTION_FAILED',
+    message: 'Could not connect',
+    operation: 'connect',
+  });
+  assert.equal(isAgent44ClientError(actualError), true);
+
+  if (isAgent44ClientError(actualError)) {
+    // Compile-time check that error is narrowed to Agent44ClientError
+    const op: string = actualError.operation;
+    const code: string = actualError.code;
+    assert.equal(op, 'connect');
+    assert.equal(code, 'CONNECTION_FAILED');
+  }
+
+  const fullActualError = new Agent44ClientError({
+    code: 'REQUEST_TIMEOUT',
+    message: 'Timed out',
+    operation: 'callTool',
+    toolName: 'my_tool',
+    timeoutMs: 5000,
+    cause: new Error('low-level timeout'),
+  });
+  assert.equal(isAgent44ClientError(fullActualError), true);
+
+  // Structural lookalike (e.g. cross-realm error)
+  const crossRealmLike = {
+    name: 'Agent44ClientError',
+    message: 'cross-realm message',
+    operation: 'cleanup',
+    code: 'CLEANUP_FAILED',
+  };
+  assert.equal(isAgent44ClientError(crossRealmLike), true);
+
+  const crossRealmWithOptionals = {
+    name: 'Agent44ClientError',
+    message: 'timed out',
+    operation: 'callTool',
+    code: 'REQUEST_TIMEOUT',
+    toolName: 'slow_tool',
+    timeoutMs: 3000,
+  };
+  assert.equal(isAgent44ClientError(crossRealmWithOptionals), true);
+
+  // Invalid inputs to isAgent44ClientError
+  assert.equal(isAgent44ClientError(null), false);
+  assert.equal(isAgent44ClientError(undefined), false);
+  assert.equal(isAgent44ClientError(42), false);
+  assert.equal(isAgent44ClientError('Agent44ClientError'), false);
+  assert.equal(isAgent44ClientError(new Error('Agent44ClientError')), false);
+  assert.equal(isAgent44ClientError({ name: 'Error', message: 'test', operation: 'op', code: 'TOOL_ERROR' }), false);
+  assert.equal(isAgent44ClientError({ name: 'Agent44ClientError' }), false);
+  assert.equal(isAgent44ClientError({ name: 'Agent44ClientError', message: 'test' }), false);
+  assert.equal(isAgent44ClientError({ name: 'Agent44ClientError', message: 'test', operation: 'op' }), false);
+  assert.equal(isAgent44ClientError({ name: 'Agent44ClientError', message: 'test', operation: 'op', code: 'INVALID_CODE' }), false);
+  assert.equal(isAgent44ClientError({ name: 'Agent44ClientError', message: 123, operation: 'op', code: 'TOOL_ERROR' }), false);
+  assert.equal(isAgent44ClientError({ name: 'Agent44ClientError', message: 'test', operation: true, code: 'TOOL_ERROR' }), false);
+  assert.equal(isAgent44ClientError({ name: 'Agent44ClientError', message: 'test', operation: 'op', code: 'TOOL_ERROR', toolName: 999 }), false);
+  assert.equal(isAgent44ClientError({ name: 'Agent44ClientError', message: 'test', operation: 'op', code: 'TOOL_ERROR', timeoutMs: '5000' }), false);
+  assert.equal(isAgent44ClientError({ name: 'Agent44ClientError', message: 'test', operation: 'op', code: 'TOOL_ERROR', timeoutMs: NaN }), false);
+  assert.equal(isAgent44ClientError({ name: 'Agent44ClientError', message: 'test', operation: 'op', code: 'TOOL_ERROR', timeoutMs: Infinity }), false);
+}
+
+async function testInitializationAndConfiguration(): Promise<void> {
+  // 1. Modern two-argument factory usage
+  const modernClient = createAgent44ProxyClient('node', {
+    args: ['--version'],
+    connectionTimeoutMs: 15_000,
+  });
+  assert.ok(modernClient instanceof Agent44ProxyClient);
+  assert.equal(modernClient.state, 'DISCONNECTED');
+
+  const modernConstructed = new Agent44ProxyClient('node', {
+    args: ['--version'],
+  });
+  assert.ok(modernConstructed instanceof Agent44ProxyClient);
+  assert.equal(modernConstructed.state, 'DISCONNECTED');
+
+  const modernNoOptions = createAgent44ProxyClient('node');
+  assert.ok(modernNoOptions instanceof Agent44ProxyClient);
+
+  // 2. Existing four-argument factory usage
+  const legacyClient = createAgent44ProxyClient(
+    'node',
+    process.stdin,
+    process.stdout,
+    {
+      args: ['--version'],
+      connectionTimeoutMs: 20_000,
+    },
+  );
+  assert.ok(legacyClient instanceof Agent44ProxyClient);
+  assert.equal(legacyClient.state, 'DISCONNECTED');
+
+  const legacyConstructed = new Agent44ProxyClient(
+    'node',
+    process.stdin,
+    process.stdout,
+  );
+  assert.ok(legacyConstructed instanceof Agent44ProxyClient);
+
+  // 3. Strict TypeScript compatibility with process.env (NodeJS.ProcessEnv = Record<string, string | undefined>)
+  const processEnvClient = createAgent44ProxyClient('node', {
+    env: process.env,
+  });
+  assert.ok(processEnvClient instanceof Agent44ProxyClient);
+
+  // 4. Undefined environment values handling and caller environment immutability
+  const originalEnv: Record<string, string | undefined> = {
+    DEFINED_KEY: 'test-value',
+    UNDEFINED_KEY: undefined,
+    EMPTY_KEY: '',
+  };
+  const snapshotBefore = { ...originalEnv };
+
+  const customEnvClient = createAgent44ProxyClient('node', {
+    env: originalEnv,
+  });
+  assert.ok(customEnvClient instanceof Agent44ProxyClient);
+
+  // Verify caller's env object was not mutated
+  assert.deepEqual(originalEnv, snapshotBefore);
+  assert.equal('UNDEFINED_KEY' in originalEnv, true);
+  assert.equal(originalEnv.UNDEFINED_KEY, undefined);
+
+  // Verify transport received sanitized environment with undefined keys stripped
+  const internalTransport = (customEnvClient as unknown as {
+    transport: { _serverParams: { env?: Record<string, string> } };
+  }).transport;
+  const sanitizedEnv = internalTransport._serverParams.env;
+  assert.ok(sanitizedEnv);
+  assert.equal(sanitizedEnv.DEFINED_KEY, 'test-value');
+  assert.equal(sanitizedEnv.EMPTY_KEY, '');
+  assert.equal('UNDEFINED_KEY' in sanitizedEnv, false);
+  assert.equal(Object.prototype.hasOwnProperty.call(sanitizedEnv, 'UNDEFINED_KEY'), false);
+
+  // 5. Existing connection and request timeout validation behavior
+  assert.throws(
+    () => new Agent44ProxyClient('node', { connectionTimeoutMs: 0 }),
+    RangeError,
+  );
+  assert.throws(
+    () => new Agent44ProxyClient('node', { connectionTimeoutMs: -1 }),
+    RangeError,
+  );
+  assert.throws(
+    () => new Agent44ProxyClient('node', { connectionTimeoutMs: NaN }),
+    RangeError,
+  );
+  assert.throws(
+    () => new Agent44ProxyClient('node', { requestTimeoutMs: 0 }),
+    RangeError,
+  );
+  assert.throws(
+    () => new Agent44ProxyClient('node', { requestTimeoutMs: -500 }),
+    RangeError,
+  );
+  assert.throws(
+    () => new Agent44ProxyClient('node', { requestTimeoutMs: Infinity }),
+    RangeError,
+  );
+
+  // 6. Configuration precedence design tests (3-tier specification)
+  function resolveTimeoutPrecedence(
+    explicit: number | undefined,
+    envValue: string | undefined,
+    sdkDefault: number,
+    name: string,
+  ): number {
+    // Tier 1: Explicit options
+    if (explicit !== undefined) {
+      if (!Number.isFinite(explicit) || explicit <= 0) {
+        throw new RangeError(`${name} must be a positive finite number`);
+      }
+      return explicit;
+    }
+
+    // Tier 2: Environment-variable defaults
+    if (envValue !== undefined && envValue.trim() !== '') {
+      const parsed = Number(envValue);
+      if (!Number.isFinite(parsed) || parsed <= 0) {
+        throw new RangeError(`${name} from environment must be a positive finite number`);
+      }
+      return parsed;
+    }
+
+    // Tier 3: SDK defaults
+    return sdkDefault;
+  }
+
+  // Precedence: Tier 1 overrides Tier 2 and Tier 3
+  assert.equal(
+    resolveTimeoutPrecedence(15000, '25000', 30000, 'connectionTimeoutMs'),
+    15000,
+  );
+  // Precedence: Tier 2 overrides Tier 3 when Tier 1 is undefined
+  assert.equal(
+    resolveTimeoutPrecedence(undefined, '25000', 30000, 'connectionTimeoutMs'),
+    25000,
+  );
+  // Precedence: Tier 3 applies when Tier 1 and Tier 2 are undefined
+  assert.equal(
+    resolveTimeoutPrecedence(undefined, undefined, 30000, 'connectionTimeoutMs'),
+    30000,
+  );
+  assert.equal(
+    resolveTimeoutPrecedence(undefined, '', 30000, 'connectionTimeoutMs'),
+    30000,
+  );
+  assert.equal(
+    resolveTimeoutPrecedence(undefined, '   ', 30000, 'connectionTimeoutMs'),
+    30000,
+  );
+
+  // Validation: Malformed / zero / negative in Tier 1
+  assert.throws(() => resolveTimeoutPrecedence(0, '25000', 30000, 'conn'), RangeError);
+  assert.throws(() => resolveTimeoutPrecedence(-500, '25000', 30000, 'conn'), RangeError);
+  assert.throws(() => resolveTimeoutPrecedence(NaN, '25000', 30000, 'conn'), RangeError);
+
+  // Validation: Malformed / zero / negative in Tier 2
+  assert.throws(() => resolveTimeoutPrecedence(undefined, '0', 30000, 'conn'), RangeError);
+  assert.throws(() => resolveTimeoutPrecedence(undefined, '-500', 30000, 'conn'), RangeError);
+  assert.throws(() => resolveTimeoutPrecedence(undefined, 'not-a-number', 30000, 'conn'), RangeError);
+  assert.throws(() => resolveTimeoutPrecedence(undefined, '100abc', 30000, 'conn'), RangeError);
+  assert.throws(() => resolveTimeoutPrecedence(undefined, 'Infinity', 30000, 'conn'), RangeError);
+  assert.throws(() => resolveTimeoutPrecedence(undefined, 'NaN', 30000, 'conn'), RangeError);
+}
+
 await testPublicShapesAndProvenance();
 await testReliabilityBehavior();
-console.log('TypeScript client reliability tests passed.');
+await testTypeSafetyAndExports();
+await testInitializationAndConfiguration();
+console.log('TypeScript client reliability and type-safety tests passed.');

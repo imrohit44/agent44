@@ -1,9 +1,10 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type {
   CallToolRequestParams,
+  CallToolResult,
   CallToolResult as MCPCallToolResult,
+  Tool,
 } from '@modelcontextprotocol/sdk/types.js';
 import {
   CallToolResultSchema,
@@ -18,17 +19,32 @@ function isMCPCallToolResult(result: MCPToolResponse): result is MCPCallToolResu
   return 'content' in result && Array.isArray(result.content);
 }
 
+export type {
+  CallToolResult,
+  CallToolResult as MCPCallToolResult,
+  Tool,
+} from '@modelcontextprotocol/sdk/types.js';
+
 export interface ProvenanceReference {
   id: string;
   sourceTool: string;
 }
 
-export interface ToolCallResult {
-  success: boolean;
+export interface SuccessfulToolCallResult {
+  success: true;
   text: string | null;
-  error: string | null;
+  error: null;
   provenance?: ProvenanceReference;
 }
+
+export interface FailedToolCallResult {
+  success: false;
+  text: string | null;
+  error: string;
+  provenance?: ProvenanceReference;
+}
+
+export type ToolCallResult = SuccessfulToolCallResult | FailedToolCallResult;
 
 export type Agent44ClientErrorCode =
   | 'CONNECTION_FAILED'
@@ -73,10 +89,55 @@ export class Agent44ClientError extends Error {
   }
 }
 
+const VALID_CLIENT_ERROR_CODES: ReadonlySet<string> = new Set<Agent44ClientErrorCode>([
+  'CONNECTION_FAILED',
+  'CONNECTION_TIMEOUT',
+  'REQUEST_TIMEOUT',
+  'REQUEST_CANCELLED',
+  'SERVER_EXITED',
+  'TOOL_ERROR',
+  'REQUEST_FAILED',
+  'CLIENT_CLOSED',
+  'INVALID_STATE',
+  'CLEANUP_FAILED',
+]);
+
+export function isAgent44ClientError(error: unknown): error is Agent44ClientError {
+  if (error instanceof Agent44ClientError) {
+    return true;
+  }
+  if (typeof error !== 'object' || error === null) {
+    return false;
+  }
+  const candidate = error as Record<string, unknown>;
+  if (candidate.name !== 'Agent44ClientError') {
+    return false;
+  }
+  if (typeof candidate.message !== 'string') {
+    return false;
+  }
+  if (typeof candidate.operation !== 'string') {
+    return false;
+  }
+  if (typeof candidate.code !== 'string' || !VALID_CLIENT_ERROR_CODES.has(candidate.code)) {
+    return false;
+  }
+  if (candidate.toolName !== undefined && typeof candidate.toolName !== 'string') {
+    return false;
+  }
+  if (
+    candidate.timeoutMs !== undefined
+    && (typeof candidate.timeoutMs !== 'number' || !Number.isFinite(candidate.timeoutMs))
+  ) {
+    return false;
+  }
+  return true;
+}
+
 export interface Agent44ProxyClientOptions {
   args?: string[];
   cwd?: string;
-  env?: Record<string, string>;
+  env?: Record<string, string | undefined>;
   connectionTimeoutMs?: number;
   requestTimeoutMs?: number;
 }
@@ -134,6 +195,30 @@ function isRequestOptions(value: unknown): value is RequestOptions {
   );
 }
 
+function sanitizeEnvironment(
+  env: Record<string, string | undefined> | undefined,
+): Record<string, string> | undefined {
+  if (!env) {
+    return undefined;
+  }
+  const sanitized: Record<string, string> = {};
+  for (const [key, value] of Object.entries(env)) {
+    if (value !== undefined) {
+      sanitized[key] = value;
+    }
+  }
+  return sanitized;
+}
+
+function isStream(value: unknown): boolean {
+  return (
+    typeof value === 'object'
+    && value !== null
+    && 'pipe' in value
+    && typeof (value as { pipe?: unknown }).pipe === 'function'
+  );
+}
+
 export class Agent44ProxyClient {
   private readonly client: Client;
   private readonly transport: StdioClientTransport;
@@ -152,22 +237,37 @@ export class Agent44ProxyClient {
 
   constructor(
     stdioCommand: string,
+    options?: Agent44ProxyClientOptions,
+  );
+  constructor(
+    stdioCommand: string,
     _stdin: NodeJS.ReadableStream,
     _stdout: NodeJS.WritableStream,
-    options: Agent44ProxyClientOptions = {},
+    options?: Agent44ProxyClientOptions,
+  );
+  constructor(
+    stdioCommand: string,
+    stdinOrOptions?: NodeJS.ReadableStream | Agent44ProxyClientOptions,
+    _stdout?: NodeJS.WritableStream,
+    options?: Agent44ProxyClientOptions,
   ) {
+    const resolvedOptions = (
+      _stdout !== undefined || isStream(stdinOrOptions)
+        ? options ?? {}
+        : (stdinOrOptions as Agent44ProxyClientOptions | undefined) ?? {}
+    );
     this.connectionTimeoutMs =
-      options.connectionTimeoutMs ?? DEFAULT_CONNECTION_TIMEOUT_MS;
+    resolvedOptions.connectionTimeoutMs ?? DEFAULT_CONNECTION_TIMEOUT_MS;
     this.requestTimeoutMs =
-      options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MSEC;
+    resolvedOptions.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MSEC;
     validateTimeout(this.connectionTimeoutMs, 'connectionTimeoutMs');
     validateTimeout(this.requestTimeoutMs, 'requestTimeoutMs');
 
     this.transport = new StdioClientTransport({
       command: stdioCommand,
-      args: options.args,
-      cwd: options.cwd,
-      env: options.env,
+      args: resolvedOptions.args,
+      cwd: resolvedOptions.cwd,
+      env: sanitizeEnvironment(resolvedOptions.env),
     });
     this.client = new Client({
       name: '@imrohit44/agent44-ts-client',
@@ -220,9 +320,9 @@ export class Agent44ProxyClient {
     if (this.stateValue === 'FAILED') {
       return Promise.reject(
         this.terminalError
-          ?? this.createError('INVALID_STATE', 'The client connection has failed', {
-            operation: 'connect',
-          }),
+        ?? this.createError('INVALID_STATE', 'The client connection has failed', {
+          operation: 'connect',
+        }),
       );
     }
     if (this.stateValue === 'CLOSING' || this.stateValue === 'CLOSED') {
@@ -321,20 +421,20 @@ export class Agent44ProxyClient {
     return result.tools;
   }
 
-  callTool(
+  callTool<TArgs extends object = Record<string, unknown>>(
     toolName: string,
-    args: Record<string, unknown>,
+    args: TArgs,
     provenance?: ProvenanceReference,
     options?: RequestOptions,
   ): Promise<ToolCallResult>;
-  callTool(
+  callTool<TArgs extends object = Record<string, unknown>>(
     toolName: string,
-    args: Record<string, unknown>,
+    args: TArgs,
     options?: RequestOptions,
   ): Promise<ToolCallResult>;
-  async callTool(
+  async callTool<TArgs extends object = Record<string, unknown>>(
     toolName: string,
-    args: Record<string, unknown>,
+    args: TArgs,
     provenanceOrOptions?: ProvenanceReference | RequestOptions,
     requestOptions?: RequestOptions,
   ): Promise<ToolCallResult> {
@@ -358,7 +458,7 @@ export class Agent44ProxyClient {
 
     const callParams: CallToolRequestParams = {
       name: toolName,
-      arguments: { ...args },
+      arguments: { ...(args as Record<string, unknown>) },
     };
     if (provenance) {
       callParams._meta = {
@@ -395,10 +495,18 @@ export class Agent44ProxyClient {
       response.content?.[0]?.type === 'text'
         ? response.content[0].text
         : null;
+    if (response.isError) {
+      return {
+        success: false,
+        text,
+        error: text ?? 'Tool call failed',
+        provenance: extractedProvenance,
+      };
+    }
     return {
-      success: !response.isError,
+      success: true,
       text,
-      error: response.isError ? text ?? 'Tool call failed' : null,
+      error: null,
       provenance: extractedProvenance,
     };
   }
@@ -464,9 +572,9 @@ export class Agent44ProxyClient {
     }
     if (this.stateValue === 'FAILED') {
       throw this.terminalError
-        ?? this.createError('INVALID_STATE', 'The client connection has failed', {
-          operation: 'connect',
-        });
+      ?? this.createError('INVALID_STATE', 'The client connection has failed', {
+        operation: 'connect',
+      });
     }
     if (this.stateValue === 'CLOSING' || this.stateValue === 'CLOSED') {
       throw this.clientClosedError('connect');
@@ -635,7 +743,7 @@ export class Agent44ProxyClient {
   }
 
   private asConnectionError(error: unknown): Agent44ClientError {
-    if (error instanceof Agent44ClientError) {
+    if (isAgent44ClientError(error)) {
       return error;
     }
     if (this.stateValue === 'CLOSING' || this.stateValue === 'CLOSED') {
@@ -706,9 +814,30 @@ export class Agent44ProxyClient {
 
 export function createAgent44ProxyClient(
   stdioCommand: string,
+  options?: Agent44ProxyClientOptions,
+): Agent44ProxyClient;
+export function createAgent44ProxyClient(
+  stdioCommand: string,
   stdin: NodeJS.ReadableStream,
   stdout: NodeJS.WritableStream,
   options?: Agent44ProxyClientOptions,
+): Agent44ProxyClient;
+export function createAgent44ProxyClient(
+  stdioCommand: string,
+  stdinOrOptions?: NodeJS.ReadableStream | Agent44ProxyClientOptions,
+  stdout?: NodeJS.WritableStream,
+  options?: Agent44ProxyClientOptions,
 ): Agent44ProxyClient {
-  return new Agent44ProxyClient(stdioCommand, stdin, stdout, options);
+  if (stdout !== undefined || isStream(stdinOrOptions)) {
+    return new Agent44ProxyClient(
+      stdioCommand,
+      stdinOrOptions as NodeJS.ReadableStream,
+      stdout as NodeJS.WritableStream,
+      options,
+    );
+  }
+  return new Agent44ProxyClient(
+    stdioCommand,
+    stdinOrOptions as Agent44ProxyClientOptions | undefined,
+  );
 }
