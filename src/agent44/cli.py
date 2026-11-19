@@ -4,12 +4,33 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import time
 from pathlib import Path
 from typing import Any
 
 from agent44 import __version__
+
+_SENSITIVE_KEY_PATTERN = re.compile(
+    r"(token|password|passwd|secret|api[_-]?key|auth|credential|cert|private|bearer)",
+    re.IGNORECASE,
+)
+
+
+def redact_sensitive_arguments(data: Any) -> Any:
+    """Recursively redact sensitive field values in argument mappings."""
+    if isinstance(data, dict):
+        result: dict[str, Any] = {}
+        for k, v in data.items():
+            if _SENSITIVE_KEY_PATTERN.search(str(k)):
+                result[k] = "[REDACTED]"
+            else:
+                result[k] = redact_sensitive_arguments(v)
+        return result
+    if isinstance(data, list):
+        return [redact_sensitive_arguments(item) for item in data]
+    return data
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -280,6 +301,17 @@ def cmd_policy(argv: list[str] | None = None) -> int:
         help="Generate policy without interactive questions",
     )
 
+    p_exp = subparsers.add_parser("explain", help="Explain policy evaluation trace for a tool call")
+    p_exp.add_argument("--policy", default="policy.yaml", help="Path to policy YAML")
+    p_exp.add_argument("--tool", default=None, help="Tool name to evaluate")
+    arg_group_exp = p_exp.add_mutually_exclusive_group()
+    arg_group_exp.add_argument("--args", default=None, help="JSON string of arguments for the tool")
+    arg_group_exp.add_argument("--args-file", default=None, help="Path to JSON file with arguments")
+    p_exp.add_argument("--delegation-context", help="JSON string for delegation context")
+    p_exp.add_argument("--provenance-context", help="JSON string for provenance context")
+    p_exp.add_argument("-q", "--quiet", action="store_true", help="Minimal output, only decision result")
+    p_exp.add_argument("--json", action="store_true", help="Machine‑readable JSON trace output")
+
     args = parser.parse_args(argv)
     if args.subcommand is None:
         parser.print_help()
@@ -450,6 +482,9 @@ def cmd_policy(argv: list[str] | None = None) -> int:
     elif args.subcommand == "init":
         return _run_policy_init(args)
 
+    elif args.subcommand == "explain":
+        return _run_policy_explain(args)
+
     return 0
 
 
@@ -542,3 +577,131 @@ def _run_policy_init(args: argparse.Namespace) -> int:
     print(f"Policy successfully written to {target}")
     print(f"Policy valid: {check_res.rule_count} rules loaded successfully.")
     return 0
+
+
+def _run_policy_explain(args: argparse.Namespace) -> int:
+    from agent44.policy import PolicyEngine
+    from agent44.policy_schema import check_policy
+
+    if not args.tool:
+        print("Error: --tool is required.", file=sys.stderr)
+        return 1
+
+    policy_path = Path(args.policy)
+    check_res = check_policy(policy_path)
+    if not check_res.valid:
+        print(f"Policy validation failed: {len(check_res.errors)} error(s).", file=sys.stderr)
+        for err in check_res.errors:
+            print(err.format(filename=str(check_res.path)), file=sys.stderr)
+        return 1
+
+    # Load arguments JSON.
+    if args.args_file:
+        args_file_path = Path(args.args_file)
+        if not args_file_path.exists():
+            print(f"Arguments file not found: {args.args_file}", file=sys.stderr)
+            return 1
+        try:
+            args_json = json.loads(args_file_path.read_text(encoding="utf-8"))
+        except Exception as e:
+            print(f"Failed to read args file: {e}", file=sys.stderr)
+            return 1
+    elif args.args is not None:
+        try:
+            args_json = json.loads(args.args)
+        except Exception as e:
+            print(f"Invalid JSON for --args: {e}", file=sys.stderr)
+            return 1
+    else:
+        args_json = {}
+
+    if not isinstance(args_json, dict):
+        print("Arguments must be a JSON object (key-value dictionary).", file=sys.stderr)
+        return 1
+
+    # Optional contexts.
+    delegation_ctx = None
+    provenance_ctx = None
+
+    if args.delegation_context:
+        try:
+            delegation_ctx = _parse_delegation_context(args.delegation_context)
+        except Exception as e:
+            print(f"Invalid JSON for --delegation-context: {e}", file=sys.stderr)
+            return 1
+
+    if args.provenance_context:
+        try:
+            provenance_ctx = _parse_provenance_context(args.provenance_context)
+        except Exception as e:
+            print(f"Invalid JSON for --provenance-context: {e}", file=sys.stderr)
+            return 1
+
+    engine = PolicyEngine.from_path(policy_path)
+    explanation = engine.explain(args.tool, args_json, provenance_ctx, delegation_ctx)
+    redacted_args = redact_sensitive_arguments(args_json)
+
+    # Determine exit code matching policy test
+    if explanation.decision == "ALLOW":
+        exit_code = 0
+    elif explanation.decision == "DENY":
+        exit_code = 2
+    elif explanation.decision == "INDETERMINATE":
+        exit_code = 3
+    else:
+        exit_code = 1
+
+    if args.json:
+        out = {
+            "policy": str(policy_path),
+            "tool": args.tool,
+            "arguments": redacted_args,
+            "decision": explanation.decision,
+            "rule_id": explanation.rule_id,
+            "reason": explanation.reason,
+            "trace": [
+                {
+                    "stage": s.stage_index,
+                    "name": s.stage_name,
+                    "status": s.status.value,
+                    "rule_id": s.rule_id,
+                    "reason": s.reason,
+                    "terminated": s.terminated,
+                }
+                for s in explanation.stages
+            ],
+            "limitations": explanation.limitations,
+        }
+        print(json.dumps(out, indent=2))
+    elif args.quiet:
+        print(explanation.decision)
+    else:
+        print("Agent44 Policy Explanation\n")
+        print(f"Policy: {policy_path}")
+        print(f"Tool: {args.tool}")
+        print(f"Arguments: {json.dumps(redacted_args)}\n")
+        print(f"Decision: {explanation.decision} (rule {explanation.rule_id})")
+        print(f"Reason: {explanation.reason}\n")
+        print("Evaluation trace:\n")
+        terminating_stage: str | None = None
+        for s in explanation.stages:
+            print(f"[{s.stage_index}] {s.stage_name}")
+            print(f"    Status: {s.status.value}")
+            if s.rule_id:
+                print(f"    Rule: {s.rule_id}")
+            if s.reason:
+                print(f"    Reason: {s.reason}")
+            print()
+            if s.terminated:
+                terminating_stage = f"stage [{s.stage_index}] ({s.stage_name})"
+
+        if terminating_stage:
+            print(f"Evaluation terminated at {terminating_stage}.")
+        print(f"Final decision: {explanation.decision}\n")
+
+        if explanation.limitations:
+            print("Limitations:")
+            for lim in explanation.limitations:
+                print(f"  - {lim}")
+
+    return exit_code

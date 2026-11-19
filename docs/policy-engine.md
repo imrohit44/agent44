@@ -98,7 +98,14 @@ raw values.
 
 ## Policy CLI tools
 
-Agent44 provides command-line tools to initialize, validate, and simulate policies:
+Agent44 provides a suite of command-line developer tools to initialize, validate, simulate, and diagnose policies:
+
+| Command | Purpose | Core Question Answered |
+|---|---|---|
+| **`policy init`** | Create a starter policy from built-in, pre-validated templates | *How do I bootstrap a new policy?* |
+| **`policy check`** | Validate syntax, Pydantic schema, and lint policies ahead of runtime | *Is this policy valid?* |
+| **`policy test`** | Dry-run hypothetical tool calls without downstream execution | *What decision does this hypothetical call receive?* |
+| **`policy explain`** | Inspect the step-by-step diagnostic evaluation trace | *Why did the engine reach that decision?* |
 
 ### 1. Guided policy initialization (`agent44 policy init`)
 
@@ -132,6 +139,16 @@ agent44 policy test --policy policy.yaml --tool add --args '{"x": 1}' [--json]
 ```
 
 Applies the authoritative runtime decision precedence and reports decisions, matched rules, reasons, and evaluation limitations.
+
+### 4. Policy diagnostics & explanation (`agent44 policy explain`)
+
+Diagnose policy evaluation step-by-step across all 11 evaluation stages:
+
+```bash
+agent44 policy explain --policy policy.yaml --tool filesystem.read_file --args '{"path": "/etc/passwd"}' [--json]
+```
+
+Traces precedence order (hard-deny, delegation, provenance, argument constraints, hard rules, deny lists, allow lists, adapter tier, default policy) and highlights where evaluation terminated. Automatically redacts sensitive fields (passwords, tokens, keys) in output.
 
 See [Architecture](architecture.md) for how a denial affects forwarding and
 [Evaluation](evaluation.md) for the scope of measured decisions.
