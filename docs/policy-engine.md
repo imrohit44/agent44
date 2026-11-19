@@ -96,5 +96,42 @@ raw values.
 - Fail-closed decisions can reduce availability. They do not prove that the
   policy is complete or that all unsafe behavior is blocked.
 
+## Policy CLI tools
+
+Agent44 provides command-line tools to initialize, validate, and simulate policies:
+
+### 1. Guided policy initialization (`agent44 policy init`)
+
+Create a valid policy using built-in, pre-validated templates:
+
+```bash
+agent44 policy init [--output PATH] [--template TEMPLATE] [--force] [--non-interactive]
+```
+
+Available templates:
+- **`default-deny`**: Production-grade least-privilege policy. All undeclared tools are denied by default.
+- **`restricted`**: Least-privilege policy with explicit tool allowances and argument-level inspection rules.
+- **`development`**: Convenient for local development and interactive prototyping with destructive tools hard-denied. (Weaker security posture, not for production).
+
+### 2. Policy schema validation & linting (`agent44 policy check`)
+
+Validate structure and lint a policy ahead of runtime:
+
+```bash
+agent44 policy check [POLICY_PATH] [-q]
+```
+
+Identifies schema errors, conflicting tool lists, duplicate rules, and lint warnings before proxy startup.
+
+### 3. Offline policy simulation (`agent44 policy test`)
+
+Dry-run hypothetical tool calls against a policy without starting downstream MCP servers or invoking external LLMs:
+
+```bash
+agent44 policy test --policy policy.yaml --tool add --args '{"x": 1}' [--json]
+```
+
+Applies the authoritative runtime decision precedence and reports decisions, matched rules, reasons, and evaluation limitations.
+
 See [Architecture](architecture.md) for how a denial affects forwarding and
 [Evaluation](evaluation.md) for the scope of measured decisions.
