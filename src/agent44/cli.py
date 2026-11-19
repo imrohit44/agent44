@@ -26,6 +26,8 @@ def main(argv: list[str] | None = None) -> int:
     p_run.set_defaults(func=cmd_run)
     p_ins = subparsers.add_parser("inspect", help="Inspect log", add_help=False)
     p_ins.set_defaults(func=cmd_inspect)
+    p_pol = subparsers.add_parser("policy", help="Policy management", add_help=False)
+    p_pol.set_defaults(func=cmd_policy)
     if argv == ["help"]:
         parser.print_help()
         return 0
@@ -144,3 +146,45 @@ def cmd_run(argv: list[str] | None = None) -> int:
     from agent44.proxy import main as proxy_main
 
     return proxy_main(argv)
+
+
+def cmd_policy(argv: list[str] | None = None) -> int:
+    import argparse
+
+    parser = argparse.ArgumentParser(prog="agent44 policy")
+    subparsers = parser.add_subparsers(dest="subcommand")
+    p_check = subparsers.add_parser("check", help="Validate and lint a policy file")
+    p_check.add_argument("policy_path", nargs="?", default="policy.yaml", help="Path to policy YAML")
+    p_check.add_argument("-q", "--quiet", action="store_true", help="Quiet output (summary only)")
+
+    args = parser.parse_args(argv)
+    if args.subcommand is None:
+        parser.print_help()
+        return 1
+
+    if args.subcommand == "check":
+        from agent44.policy_schema import check_policy
+
+        result = check_policy(args.policy_path)
+        if not args.quiet:
+            print(f"Checking policy: {result.path}")
+
+        for err in result.errors:
+            print(err.format(filename=str(result.path)), file=sys.stderr)
+
+        for warn in result.warnings:
+            print(warn.format(filename=str(result.path)))
+
+        if result.valid:
+            warn_msg = f" ({len(result.warnings)} warning{'s' if len(result.warnings) != 1 else ''})" if result.warnings else ""
+            print(f"Policy valid: {result.rule_count} rules loaded successfully{warn_msg}.")
+            return 0
+        else:
+            print(
+                f"Policy check failed: {len(result.errors)} error{'s' if len(result.errors) != 1 else ''} found.",
+                file=sys.stderr,
+            )
+            return 1
+
+    return 0
+
