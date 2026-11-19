@@ -195,6 +195,9 @@ uv run agent44 policy check policy.yaml
 
 # Simulate tool calls offline against the policy
 uv run agent44 policy test --policy policy.yaml --tool add --args '{"x": 1}'
+
+# Explain why a decision was reached across all evaluation stages
+uv run agent44 policy explain --policy policy.yaml --tool add --args '{"x": 1}'
 ```
 
 ### Run the proxy

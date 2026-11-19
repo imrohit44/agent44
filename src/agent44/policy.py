@@ -115,6 +115,42 @@ class Decision(BaseModel):
     validation_transition: str | None = None
 
 
+class TraceStageStatus(StrEnum):
+    """Evaluation status for a single policy precedence stage."""
+
+    MATCHED = "MATCHED"
+    PASSED = "PASSED"
+    NOT_MATCHED = "NOT_MATCHED"
+    SKIPPED = "SKIPPED"
+    NOT_REQUIRED = "NOT_REQUIRED"
+    UNAVAILABLE = "UNAVAILABLE"
+
+
+class TraceStage(BaseModel):
+    """A single evaluation stage in the policy decision trace."""
+
+    stage_index: int
+    stage_name: str
+    status: TraceStageStatus
+    rule_id: str | None = None
+    reason: str | None = None
+    terminated: bool = False
+    details: dict[str, Any] = Field(default_factory=dict)
+
+
+class PolicyExplanation(BaseModel):
+    """Structured decision trace explaining how PolicyEngine reached an outcome."""
+
+    policy_id: str
+    policy_version: str | None = None
+    tool: str
+    decision: str
+    rule_id: str
+    reason: str
+    stages: list[TraceStage]
+    limitations: list[str] = Field(default_factory=list)
+
+
 def _lookup(arguments: dict[str, Any], path: str) -> tuple[Any, bool]:
     """Resolve a dotted field path inside nested dicts; report presence."""
     current: Any = arguments
@@ -1002,4 +1038,431 @@ class PolicyEngine:
         if matched is not None:
             return matched
         return self._default_decision(tool_name)
+
+    def explain(
+        self,
+        tool_name: str,
+        arguments: dict[str, Any] | None,
+        provenance_context: ProvenanceContext | None = None,
+        delegation_context: DelegationContext | None = None,
+    ) -> PolicyExplanation:
+        """Produce a structured diagnostic trace explaining how PolicyEngine evaluates one call.
+
+        Applies the exact authoritative runtime precedence without invoking downstream
+        tools, subprocesses, or model adapters.
+        """
+        policy = self.policy
+        args = dict(arguments or {})
+        base: dict[str, Any] = {
+            "policy_id": policy.name,
+            "policy_version": policy.version,
+        }
+        stages: list[TraceStage] = []
+        limitations: list[str] = []
+
+        if policy.delegation.enforcement == "required" and delegation_context is None:
+            limitations.append(
+                "delegation enforcement is required by policy but no delegation context was supplied; evaluated as missing context (fail-closed)"
+            )
+        if (
+            policy.provenance.enforcement == "required"
+            and tool_name in policy.provenance.rules
+            and provenance_context is None
+        ):
+            limitations.append(
+                "provenance enforcement is required by policy but no provenance context was supplied; evaluated against empty context (fail-closed)"
+            )
+
+        final_decision: str | None = None
+        final_rule_id: str | None = None
+        final_reason: str | None = None
+
+        # Stage 1: Hard Deny Tools List
+        if tool_name in set(policy.hard_deny_tools):
+            final_decision = Action.DENY.value
+            final_rule_id = "hard_deny_tools"
+            final_reason = f"tool '{tool_name}' is hard-denied by policy"
+            stages.append(
+                TraceStage(
+                    stage_index=1,
+                    stage_name="HARD_DENY_TOOLS",
+                    status=TraceStageStatus.MATCHED,
+                    rule_id="hard_deny_tools",
+                    reason=final_reason,
+                    terminated=True,
+                )
+            )
+        else:
+            stages.append(
+                TraceStage(
+                    stage_index=1,
+                    stage_name="HARD_DENY_TOOLS",
+                    status=TraceStageStatus.NOT_MATCHED,
+                    reason=f"tool '{tool_name}' is not in hard_deny_tools",
+                    terminated=False,
+                )
+            )
+
+        # Stage 2: Delegated Authority
+        if final_decision is None:
+            if policy.delegation.enforcement != "required":
+                stages.append(
+                    TraceStage(
+                        stage_index=2,
+                        stage_name="DELEGATION",
+                        status=TraceStageStatus.NOT_REQUIRED,
+                        reason="delegation enforcement is not required by policy",
+                        terminated=False,
+                    )
+                )
+            else:
+                del_dec = self._delegation_decision(tool_name, delegation_context, base)
+                if del_dec is not None:
+                    final_decision = del_dec.action.value
+                    final_rule_id = del_dec.rule_id
+                    final_reason = del_dec.reason
+                    stages.append(
+                        TraceStage(
+                            stage_index=2,
+                            stage_name="DELEGATION",
+                            status=TraceStageStatus.MATCHED,
+                            rule_id=del_dec.rule_id,
+                            reason=del_dec.reason,
+                            terminated=True,
+                        )
+                    )
+                else:
+                    stages.append(
+                        TraceStage(
+                            stage_index=2,
+                            stage_name="DELEGATION",
+                            status=TraceStageStatus.PASSED,
+                            reason=f"tool '{tool_name}' is permitted within delegated authority",
+                            terminated=False,
+                        )
+                    )
+
+        # Stage 3: Provenance Restrictions
+        if final_decision is None:
+            if policy.provenance.enforcement != "required":
+                stages.append(
+                    TraceStage(
+                        stage_index=3,
+                        stage_name="PROVENANCE",
+                        status=TraceStageStatus.NOT_REQUIRED,
+                        reason="provenance enforcement is not required by policy",
+                        terminated=False,
+                    )
+                )
+            elif tool_name not in policy.provenance.rules:
+                stages.append(
+                    TraceStage(
+                        stage_index=3,
+                        stage_name="PROVENANCE",
+                        status=TraceStageStatus.SKIPPED,
+                        reason=f"no provenance restrictions configured for tool '{tool_name}'",
+                        terminated=False,
+                    )
+                )
+            else:
+                prov_dec = self._provenance_decision(tool_name, args, provenance_context, base)
+                if prov_dec is not None:
+                    final_decision = prov_dec.action.value
+                    final_rule_id = prov_dec.rule_id
+                    final_reason = prov_dec.reason
+                    stages.append(
+                        TraceStage(
+                            stage_index=3,
+                            stage_name="PROVENANCE",
+                            status=TraceStageStatus.MATCHED,
+                            rule_id=prov_dec.rule_id,
+                            reason=prov_dec.reason,
+                            terminated=True,
+                        )
+                    )
+                else:
+                    stages.append(
+                        TraceStage(
+                            stage_index=3,
+                            stage_name="PROVENANCE",
+                            status=TraceStageStatus.PASSED,
+                            reason=f"arguments satisfy configured provenance restrictions for tool '{tool_name}'",
+                            terminated=False,
+                        )
+                    )
+
+        # Stage 4: Argument Constraints
+        if final_decision is None:
+            if tool_name not in policy.argument_constraints:
+                stages.append(
+                    TraceStage(
+                        stage_index=4,
+                        stage_name="ARGUMENT_CONSTRAINTS",
+                        status=TraceStageStatus.SKIPPED,
+                        reason=f"no argument constraints declared for tool '{tool_name}'",
+                        terminated=False,
+                    )
+                )
+            else:
+                arg_dec = self._argument_constraint_decision(tool_name, args, base)
+                if arg_dec is not None:
+                    final_decision = arg_dec.action.value
+                    final_rule_id = arg_dec.rule_id
+                    final_reason = arg_dec.reason
+                    stages.append(
+                        TraceStage(
+                            stage_index=4,
+                            stage_name="ARGUMENT_CONSTRAINTS",
+                            status=TraceStageStatus.MATCHED,
+                            rule_id=arg_dec.rule_id,
+                            reason=arg_dec.reason,
+                            terminated=True,
+                        )
+                    )
+                else:
+                    stages.append(
+                        TraceStage(
+                            stage_index=4,
+                            stage_name="ARGUMENT_CONSTRAINTS",
+                            status=TraceStageStatus.PASSED,
+                            reason=f"arguments satisfy argument constraints for tool '{tool_name}'",
+                            terminated=False,
+                        )
+                    )
+
+        # Stage 5: Hard Deny Argument Rules
+        if final_decision is None:
+            hard_deny_rules = [
+                r for r in policy.rules if r.hard and r.action is Action.DENY and r.tool == tool_name
+            ]
+            if not hard_deny_rules:
+                stages.append(
+                    TraceStage(
+                        stage_index=5,
+                        stage_name="HARD_DENY_RULES",
+                        status=TraceStageStatus.SKIPPED,
+                        reason=f"no hard DENY rules declared for tool '{tool_name}'",
+                        terminated=False,
+                    )
+                )
+            else:
+                matched_rule = next((r for r in hard_deny_rules if r.matches(tool_name, args)), None)
+                if matched_rule is not None:
+                    final_decision = Action.DENY.value
+                    final_rule_id = matched_rule.id
+                    final_reason = matched_rule.reason
+                    stages.append(
+                        TraceStage(
+                            stage_index=5,
+                            stage_name="HARD_DENY_RULES",
+                            status=TraceStageStatus.MATCHED,
+                            rule_id=matched_rule.id,
+                            reason=matched_rule.reason,
+                            terminated=True,
+                        )
+                    )
+                else:
+                    stages.append(
+                        TraceStage(
+                            stage_index=5,
+                            stage_name="HARD_DENY_RULES",
+                            status=TraceStageStatus.NOT_MATCHED,
+                            reason="hard DENY rules evaluated but argument conditions did not match",
+                            terminated=False,
+                        )
+                    )
+
+        # Stage 6: Deny Tools List
+        if final_decision is None:
+            if tool_name in set(policy.deny_tools):
+                final_decision = Action.DENY.value
+                final_rule_id = "deny_tools"
+                final_reason = f"tool '{tool_name}' is denied by policy"
+                stages.append(
+                    TraceStage(
+                        stage_index=6,
+                        stage_name="DENY_TOOLS",
+                        status=TraceStageStatus.MATCHED,
+                        rule_id="deny_tools",
+                        reason=final_reason,
+                        terminated=True,
+                    )
+                )
+            else:
+                stages.append(
+                    TraceStage(
+                        stage_index=6,
+                        stage_name="DENY_TOOLS",
+                        status=TraceStageStatus.NOT_MATCHED,
+                        reason=f"tool '{tool_name}' is not in deny_tools",
+                        terminated=False,
+                    )
+                )
+
+        # Stage 7: Ordinary Deny Argument Rules
+        if final_decision is None:
+            deny_rules = [
+                r for r in policy.rules if not r.hard and r.action is Action.DENY and r.tool == tool_name
+            ]
+            if not deny_rules:
+                stages.append(
+                    TraceStage(
+                        stage_index=7,
+                        stage_name="DENY_ARGUMENT_RULES",
+                        status=TraceStageStatus.SKIPPED,
+                        reason=f"no DENY argument rules declared for tool '{tool_name}'",
+                        terminated=False,
+                    )
+                )
+            else:
+                matched_rule = next((r for r in deny_rules if r.matches(tool_name, args)), None)
+                if matched_rule is not None:
+                    final_decision = Action.DENY.value
+                    final_rule_id = matched_rule.id
+                    final_reason = matched_rule.reason
+                    stages.append(
+                        TraceStage(
+                            stage_index=7,
+                            stage_name="DENY_ARGUMENT_RULES",
+                            status=TraceStageStatus.MATCHED,
+                            rule_id=matched_rule.id,
+                            reason=matched_rule.reason,
+                            terminated=True,
+                        )
+                    )
+                else:
+                    stages.append(
+                        TraceStage(
+                            stage_index=7,
+                            stage_name="DENY_ARGUMENT_RULES",
+                            status=TraceStageStatus.NOT_MATCHED,
+                            reason="DENY argument rules evaluated but argument conditions did not match",
+                            terminated=False,
+                        )
+                    )
+
+        # Stage 8: Allow Tools List
+        if final_decision is None:
+            if tool_name in set(policy.allow_tools):
+                final_decision = Action.ALLOW.value
+                final_rule_id = "allow_tools"
+                final_reason = f"tool '{tool_name}' is allowed by policy"
+                stages.append(
+                    TraceStage(
+                        stage_index=8,
+                        stage_name="ALLOW_TOOLS",
+                        status=TraceStageStatus.MATCHED,
+                        rule_id="allow_tools",
+                        reason=final_reason,
+                        terminated=True,
+                    )
+                )
+            else:
+                stages.append(
+                    TraceStage(
+                        stage_index=8,
+                        stage_name="ALLOW_TOOLS",
+                        status=TraceStageStatus.NOT_MATCHED,
+                        reason=f"tool '{tool_name}' is not in allow_tools",
+                        terminated=False,
+                    )
+                )
+
+        # Stage 9: Ordinary Allow Argument Rules
+        if final_decision is None:
+            allow_rules = [
+                r for r in policy.rules if not r.hard and r.action is Action.ALLOW and r.tool == tool_name
+            ]
+            if not allow_rules:
+                stages.append(
+                    TraceStage(
+                        stage_index=9,
+                        stage_name="ALLOW_ARGUMENT_RULES",
+                        status=TraceStageStatus.SKIPPED,
+                        reason=f"no ALLOW argument rules declared for tool '{tool_name}'",
+                        terminated=False,
+                    )
+                )
+            else:
+                matched_rule = next((r for r in allow_rules if r.matches(tool_name, args)), None)
+                if matched_rule is not None:
+                    final_decision = Action.ALLOW.value
+                    final_rule_id = matched_rule.id
+                    final_reason = matched_rule.reason
+                    stages.append(
+                        TraceStage(
+                            stage_index=9,
+                            stage_name="ALLOW_ARGUMENT_RULES",
+                            status=TraceStageStatus.MATCHED,
+                            rule_id=matched_rule.id,
+                            reason=matched_rule.reason,
+                            terminated=True,
+                        )
+                    )
+                else:
+                    stages.append(
+                        TraceStage(
+                            stage_index=9,
+                            stage_name="ALLOW_ARGUMENT_RULES",
+                            status=TraceStageStatus.NOT_MATCHED,
+                            reason="ALLOW argument rules evaluated but argument conditions did not match",
+                            terminated=False,
+                        )
+                    )
+
+        # Stage 10: Model Adapter Tier
+        if final_decision is None:
+            if tool_name in set(policy.adapter_tools):
+                final_decision = "INDETERMINATE"
+                final_rule_id = "adapter_tools"
+                final_reason = f"tool '{tool_name}' requires model adapter evaluation, which is unavailable offline"
+                limitations.append("model-based adapter evaluation unavailable offline; call requires live adapter")
+                stages.append(
+                    TraceStage(
+                        stage_index=10,
+                        stage_name="ADAPTER_TIER",
+                        status=TraceStageStatus.UNAVAILABLE,
+                        rule_id="adapter_tools",
+                        reason=final_reason,
+                        terminated=True,
+                    )
+                )
+            else:
+                stages.append(
+                    TraceStage(
+                        stage_index=10,
+                        stage_name="ADAPTER_TIER",
+                        status=TraceStageStatus.NOT_REQUIRED,
+                        reason=f"tool '{tool_name}' is not in adapter_tools",
+                        terminated=False,
+                    )
+                )
+
+        # Stage 11: Configured Default
+        if final_decision is None:
+            default_dec = self._default_decision(tool_name)
+            final_decision = default_dec.action.value
+            final_rule_id = default_dec.rule_id
+            final_reason = default_dec.reason
+            stages.append(
+                TraceStage(
+                    stage_index=11,
+                    stage_name="DEFAULT_POLICY",
+                    status=TraceStageStatus.MATCHED,
+                    rule_id=default_dec.rule_id,
+                    reason=default_dec.reason,
+                    terminated=True,
+                )
+            )
+
+        return PolicyExplanation(
+            policy_id=policy.name,
+            policy_version=policy.version,
+            tool=tool_name,
+            decision=final_decision or Action.DENY.value,
+            rule_id=final_rule_id or "default_deny",
+            reason=final_reason or "policy evaluation concluded",
+            stages=stages,
+            limitations=limitations,
+        )
 
