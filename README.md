@@ -184,6 +184,19 @@ Explicit denials and hard denials take precedence over allows. See the complete
 [policy guide](docs/policy-engine.md) and the existing
 [demo policy](evaluation/demo.yaml).
 
+You can also initialize, validate, and dry-run policies using the CLI:
+
+```bash
+# Initialize a new policy template (default-deny, restricted, development)
+uv run agent44 policy init --template default-deny
+
+# Validate and lint policy syntax and schema
+uv run agent44 policy check policy.yaml
+
+# Simulate tool calls offline against the policy
+uv run agent44 policy test --policy policy.yaml --tool add --args '{"x": 1}'
+```
+
 ### Run the proxy
 
 Run this from the repository root. The proxy uses stdio for its MCP connection;

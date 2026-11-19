@@ -260,6 +260,26 @@ def cmd_policy(argv: list[str] | None = None) -> int:
     p_test.add_argument("-q", "--quiet", action="store_true", help="Minimal output, only decision result")
     p_test.add_argument("--json", action="store_true", help="Machine‑readable JSON output")
 
+    p_init = subparsers.add_parser("init", help="Guided policy initialization")
+    p_init.add_argument("--output", "-o", default=None, help="Destination policy file (default: policy.yaml)")
+    p_init.add_argument(
+        "--template",
+        "-t",
+        default=None,
+        help="Policy template to use (default-deny, restricted, development)",
+    )
+    p_init.add_argument(
+        "--force",
+        "-f",
+        action="store_true",
+        help="Explicitly allow overwriting an existing file",
+    )
+    p_init.add_argument(
+        "--non-interactive",
+        action="store_true",
+        help="Generate policy without interactive questions",
+    )
+
     args = parser.parse_args(argv)
     if args.subcommand is None:
         parser.print_help()
@@ -427,4 +447,98 @@ def cmd_policy(argv: list[str] | None = None) -> int:
 
         return exit_code
 
+    elif args.subcommand == "init":
+        return _run_policy_init(args)
+
+    return 0
+
+
+def _run_policy_init(args: argparse.Namespace) -> int:
+    from agent44.policy_schema import check_policy
+    from agent44.policy_templates import TEMPLATES, get_template
+
+    is_interactive = not args.non_interactive
+
+    output_path = args.output
+    template_name = args.template
+
+    if is_interactive:
+        try:
+            if not output_path:
+                val = input("Destination file [policy.yaml]: ").strip()
+                output_path = val or "policy.yaml"
+
+            if not template_name:
+                print("Select a policy template:")
+                print("  1) default-deny  - Production-grade least-privilege (undeclared tools blocked)")
+                print("  2) restricted    - Explicit allowances with parameter inspection rules")
+                print("  3) development   - Local experimentation (permissive with destructive tools blocked)")
+                choice = input("Choose template [1-3] (default 1): ").strip()
+                if not choice or choice == "1" or choice == "default-deny":
+                    template_name = "default-deny"
+                elif choice == "2" or choice == "restricted":
+                    template_name = "restricted"
+                elif choice == "3" or choice == "development":
+                    template_name = "development"
+                else:
+                    template_name = choice
+        except (EOFError, KeyboardInterrupt):
+            print("\nPolicy initialization cancelled.")
+            return 0
+    else:
+        if not output_path:
+            output_path = "policy.yaml"
+        if not template_name:
+            template_name = "default-deny"
+
+    tmpl = get_template(template_name)
+    if tmpl is None:
+        available = ", ".join(sorted(TEMPLATES.keys()))
+        print(f"Error: unknown template '{template_name}'. Available templates: {available}", file=sys.stderr)
+        return 1
+
+    target = Path(output_path)
+    if target.exists() and not args.force:
+        print(f"Error: destination file '{target}' already exists (use --force to overwrite).", file=sys.stderr)
+        return 1
+
+    if is_interactive:
+        try:
+            print(f"\nSelected template: {tmpl.name}")
+            print(f"{tmpl.description}\n")
+            print(f"--- Preview: {target} ---")
+            print(tmpl.content.rstrip())
+            print("--------------------------\n")
+            confirm = input(f"Write this policy to {target}? [Y/n]: ").strip().lower()
+            if confirm and confirm not in ("y", "yes"):
+                print("Policy initialization cancelled.")
+                return 0
+        except (EOFError, KeyboardInterrupt):
+            print("\nPolicy initialization cancelled.")
+            return 0
+
+    # Ensure parent directory exists
+    if target.parent != Path(".") and not target.parent.exists():
+        target.parent.mkdir(parents=True, exist_ok=True)
+        print(f"Created directory: {target.parent}")
+
+    # Atomic write and validation
+    temp_file = target.with_name(f".{target.name}.tmp")
+    try:
+        temp_file.write_text(tmpl.content, encoding="utf-8")
+        check_res = check_policy(temp_file)
+        if not check_res.valid:
+            temp_file.unlink(missing_ok=True)
+            print(f"Generated policy validation failed: {len(check_res.errors)} error(s).", file=sys.stderr)
+            for err in check_res.errors:
+                print(err.format(filename=str(target)), file=sys.stderr)
+            return 1
+        temp_file.replace(target)
+    except Exception as e:
+        temp_file.unlink(missing_ok=True)
+        print(f"Failed to write policy file: {e}", file=sys.stderr)
+        return 1
+
+    print(f"Policy successfully written to {target}")
+    print(f"Policy valid: {check_res.rule_count} rules loaded successfully.")
     return 0
